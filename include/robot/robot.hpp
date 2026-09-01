@@ -4,22 +4,23 @@
 namespace Robot
 {
 
-class Robot
-{
-public:
-    static Robot& instance();
+    class Robot
+    {
+    public:
+        static Robot &instance();
 
-    void start();
-    void stop();
-    void setupI2w();
+        void start();
+        void stop();
+        void setupI2w();
+        void tick();
 
-private:
-    Robot() = default;
-    ~Robot() = default;
-    i2wManager m_i2w;
+    private:
+        Robot() = default;
+        ~Robot() = default;
+        i2wManager m_i2w;
 
-    Robot(const Robot&) = delete;
-    Robot& operator=(const Robot&) = delete;
-};
+        Robot(const Robot &) = delete;
+        Robot &operator=(const Robot &) = delete;
+    };
 
 } // namespace Robot

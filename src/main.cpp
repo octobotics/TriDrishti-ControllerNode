@@ -33,6 +33,7 @@ int main()
     // namespace
     while (!shutdownRequested.load(std::memory_order_relaxed))
     {
+        robot.tick();
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
 

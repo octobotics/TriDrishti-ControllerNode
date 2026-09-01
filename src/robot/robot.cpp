@@ -18,8 +18,6 @@ namespace Robot
         m_i2w.config();
         m_i2w.init();
 
-
-
         m_i2w.setup();
         
     }
@@ -32,6 +30,11 @@ namespace Robot
         // Start threads
         // Enter main loop
         std::cout << "Start Robot " << std::endl;
+    }
+
+    void Robot::tick()
+    {
+        m_i2w.tick();
     }
 
     void Robot::stop()

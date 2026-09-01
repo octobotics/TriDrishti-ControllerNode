@@ -4,6 +4,9 @@
 #include <memory>
 
 #include "i2w/impl.hpp"
+#include "crawler_i2w_msgs/ui/joy.hpp"
+#include "crawler_i2w_msgs/robot/cmd_vel.hpp"
+
 
 class i2wNode;
 
@@ -38,18 +41,8 @@ public:
         std::cout << "i2wNode Destroyed\n";
     }
 
-private:
     // it should be onSetUp
-    i2w::LifecycleResult OnSetup() noexcept override
-    {
-        std::cout << "i2wNode::OnSetup()" << std::endl;
-        return i2w::Ok();
-    }
-
+    i2w::LifecycleResult OnSetup() noexcept;
     // it should be onTick
-    i2w::LifecycleResult OnTick() noexcept override
-    {
-        std::cout << "i2wNode::OnTick()" << std::endl;
-        return i2w::Ok();
-    }
+    i2w::LifecycleResult OnTick() noexcept;
 };
