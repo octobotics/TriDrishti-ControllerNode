@@ -3,17 +3,23 @@
 #include <csignal>
 #include <iostream>
 #include <thread>
+#include <iostream>
+#include <i2w/impl.hpp>
+// #include <logger.hpp>
+#include "behaviortree_cpp_v3/action_node.h"
+#include "behaviortree_cpp_v3/action_node.h"
+#include "behaviortree_cpp_v3/bt_factory.h"
 
 #include "robot/robot.hpp"
 
 namespace
 {
-std::atomic<bool> shutdownRequested{false};
+    std::atomic<bool> shutdownRequested{false};
 
-void signalHandler(int)
-{
-    shutdownRequested.store(true, std::memory_order_relaxed);
-}
+    void signalHandler(int)
+    {
+        shutdownRequested.store(true, std::memory_order_relaxed);
+    }
 } // namespace
 
 int main()
@@ -22,9 +28,9 @@ int main()
 
     std::cout << "Starting Robot..." << std::endl;
 
-    Robot::Robot& robot = Robot::Robot::instance();
+    Robot::Robot &robot = Robot::Robot::instance();
     robot.start();
-   // namespace
+    // namespace
     while (!shutdownRequested.load(std::memory_order_relaxed))
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
@@ -34,20 +40,10 @@ int main()
 
     robot.stop();
 
-    return EXIT_SUCCESS;
-#include <iostream>
-#include <i2w/impl.hpp>
-#include <logger.hpp>
-#include "behaviortree_cpp_v3/action_node.h"
-#include "behaviortree_cpp_v3/action_node.h"
-#include "behaviortree_cpp_v3/bt_factory.h"
+    // Logger::getInstance().configure(Logger::LogLevel::DEBUG, "robot.log", false);
+    // Logger &log = Logger::getInstance();
 
-
-int main()
-{   Logger::getInstance().configure(Logger::LogLevel::DEBUG, "robot.log", false);
-    Logger &log = Logger::getInstance();
-
-    LOG_DEBUG("Main", "Robot Entry Point... ");
+    // LOG_DEBUG("Main", "Robot Entry Point... ");
 
     return 0;
 }
