@@ -95,7 +95,7 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
                 cmd_vel_.angularVelocity = -normalize(sample.value.axis0, 5);
                 cmd_vel_.timestamp = static_cast<std::uint64_t>(runtime().clock().now().ns);
                 (void)publisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
-                std::cout << "Published cmd_vel: linearVelocity -> " << cmd_vel_.linearVelocity << " angularVelocity -> " << cmd_vel_.angularVelocity << std::endl;
+//                std::cout << "Published cmd_vel: linearVelocity -> " << cmd_vel_.linearVelocity << " angularVelocity -> " << cmd_vel_.angularVelocity << std::endl;
             }
         },
         opts);
@@ -221,7 +221,7 @@ i2w::LifecycleResult i2wNode::OnTick() noexcept
         cmd_vel_.angularVelocity = 0.0f;
         cmd_vel_.timestamp = static_cast<std::uint64_t>(runtime().clock().now().ns);
         (void)publisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
-        std::cout << "Published cmd_vel: linearVelocity -> " << cmd_vel_.linearVelocity << " angularVelocity -> " << cmd_vel_.angularVelocity << std::endl;
+  //      std::cout << "Published cmd_vel: linearVelocity -> " << cmd_vel_.linearVelocity << " angularVelocity -> " << cmd_vel_.angularVelocity << std::endl;
 
         // std::cout << "UI is not live. Stopping the robot." << std::endl;
     }

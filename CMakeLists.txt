@@ -22,7 +22,6 @@ endif()
 add_subdirectory("${I2W_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/i2w")
 add_subdirectory("${CRAWLER_I2W_MSGS_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/crawler_i2w_msgs")
 
-find_package(behaviortree_cpp_v3 REQUIRED)
 
 add_executable(robot_mcu_node
   src/main.cpp
@@ -38,7 +37,6 @@ target_include_directories(robot_mcu_node PRIVATE
   target_link_libraries(robot_mcu_node PRIVATE
   i2w::i2w
   crawler_i2w_msgs::crawler_i2w_msgs
-  behaviortree_cpp_v3
 )
 
 install(TARGETS robot_mcu_node

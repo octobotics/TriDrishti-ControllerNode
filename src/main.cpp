@@ -6,9 +6,6 @@
 #include <iostream>
 #include <i2w/impl.hpp>
 // #include <logger.hpp>
-#include "behaviortree_cpp_v3/action_node.h"
-#include "behaviortree_cpp_v3/action_node.h"
-#include "behaviortree_cpp_v3/bt_factory.h"
 
 #include "robot/robot.hpp"
 
