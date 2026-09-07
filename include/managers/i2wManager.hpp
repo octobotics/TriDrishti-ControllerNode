@@ -8,6 +8,9 @@
 #include "crawler_i2w_msgs/robot/cmd_vel.hpp"
 #include "crawler_i2w_services/uirobotconnectioncheck.hpp"
 #include "crawler_i2w_services/rasterManualControl.hpp"
+
+#include "mcuSetting.hpp"
+
 class i2wNode;
 
 class i2wManager
