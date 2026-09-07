@@ -91,8 +91,27 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
                                                { std::cout << "Raster Prob Move Left Service Response: " << (response.value.status ? "Success" : "Failure") << std::endl; });
                 }
 
-                cmd_vel_.linearVelocity = -normalize(sample.value.axis2, 10);
-                cmd_vel_.angularVelocity = -normalize(sample.value.axis0, 5);
+                if (sample.value.button4)
+                {
+                    speed_factor++;
+                    if (speed_factor > 10)
+                    {
+                        speed_factor = 10;
+                    }
+                    std::cout << "Speed Factor: " << speed_factor << std::endl;
+                }
+                if (sample.value.button0)
+                {
+                    speed_factor--;
+                    if (speed_factor < 1)
+                    {
+                        speed_factor = 1;
+                    }
+                    std::cout << "Speed Factor: " << speed_factor << std::endl;
+                }
+
+                cmd_vel_.linearVelocity = -normalize(sample.value.axis2, 10*speed_factor);
+                cmd_vel_.angularVelocity = -normalize(sample.value.axis0, 5*speed_factor);
                 cmd_vel_.timestamp = static_cast<std::uint64_t>(runtime().clock().now().ns);
                 (void)publisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
                 //                std::cout << "Published cmd_vel: linearVelocity -> " << cmd_vel_.linearVelocity << " angularVelocity -> " << cmd_vel_.angularVelocity << std::endl;
@@ -200,7 +219,7 @@ void i2wNode::callUiRobotConnectionCheckService()
     }
     else
     {
-        std::cout << "Watchdog is disabled. Skipping UI connection check." << std::endl;
+        // std::cout << "Watchdog is disabled. Skipping UI connection check." << std::endl;
         waiting_for_response_ = false;
         setUiLive(true);
     }

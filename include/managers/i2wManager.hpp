@@ -57,6 +57,7 @@ public:
 
     bool waiting_for_response_{false};
     bool is_ui_live_{false};
+    float speed_factor{1.0f}; // 1 second
     std::chrono::steady_clock::time_point next_call_{};
     std::chrono::steady_clock::time_point response_deadline_{};
     void callUiRobotConnectionCheckService();
