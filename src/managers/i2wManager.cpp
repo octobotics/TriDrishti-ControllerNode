@@ -110,8 +110,8 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
                     std::cout << "Speed Factor: " << speed_factor << std::endl;
                 }
 
-                cmd_vel_.linearVelocity = -normalize(sample.value.axis2, 10*speed_factor);
-                cmd_vel_.angularVelocity = -normalize(sample.value.axis0, 5*speed_factor);
+                cmd_vel_.linearVelocity = -normalize(sample.value.axis2, 10 * speed_factor);
+                cmd_vel_.angularVelocity = -normalize(sample.value.axis0, 5 * speed_factor);
                 cmd_vel_.timestamp = static_cast<std::uint64_t>(runtime().clock().now().ns);
                 (void)publisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
                 //                std::cout << "Published cmd_vel: linearVelocity -> " << cmd_vel_.linearVelocity << " angularVelocity -> " << cmd_vel_.angularVelocity << std::endl;
@@ -206,8 +206,18 @@ void i2wNode::callUiRobotConnectionCheckService()
             request, runtime().clock().now().ns,
             [this](const i2w::Sample<crawler_i2w_services::UiRobotConnectionCheckReponse> &sample)
             {
-                waiting_for_response_ = false;
-                setUiLive(true);
+                if (sample.value.pong)
+                {
+                    waiting_for_response_ = false;
+                    setUiLive(true);
+                }
+                else
+                {
+                    waiting_for_response_ = false;
+                    setUiLive(false);
+                }
+
+                std::cout << "UI Robot Connection Check Service Response: " << (sample.value.pong ? "Success" : "Failure") << std::endl;
             });
 
         if (!result)
