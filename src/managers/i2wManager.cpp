@@ -353,3 +353,54 @@ float i2wNode::normalize(int16_t value, float max_output)
 
     return (static_cast<float>(value) / 32767.0f) * max_output;
 }
+
+void i2wNode::configerLogger()
+{
+    // Get current time
+    auto now = std::chrono::system_clock::now();
+    std::time_t time = std::chrono::system_clock::to_time_t(now);
+
+    std::tm localTime = *std::localtime(&time);
+
+    // Get current user's home directory
+    const char *home = std::getenv("HOME");
+
+    std::ostringstream timestamp;
+    timestamp << std::put_time(&localTime, "%Y%m%d_%H%M%S");
+
+    std::string value = timestamp.str();
+
+    // Create date directory: 27_sep_2016
+    std::ostringstream date;
+    date << std::put_time(&localTime, "%d_%b_%Y");
+
+    std::string logDir = std::string(home) + "/logs/mcu_i2w/" + date.str();
+
+    // Create directory if it doesn't exist
+    std::filesystem::create_directories(logDir);
+
+    // Create log file
+    std::string logFile = logDir + "/" + value + ".log";
+
+    std::ofstream file(logFile, std::ios::app);
+
+    // if (!file.is_open())
+    // {
+    //     return 1;
+    // }
+
+    // file << "Log file created/opened\n";
+
+    // file.close();
+
+    // default folder ($HOME/log/robot.log)
+
+    // Logger::getInstance().configure(Logger::LogLevel::DEBUG, "robot.log", false);
+
+    // Pass an absolute path directly as the filename, no logDir needed
+
+    Logger::getInstance().configure(Logger::LogLevel::DEBUG, logFile, false, "", false);
+    auto &log = Logger::getInstance();
+
+    LOG_DEBUG("Main", "init");
+}

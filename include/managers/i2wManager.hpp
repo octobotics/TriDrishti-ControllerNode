@@ -11,6 +11,24 @@
 #include "crawler_i2w_services/moveRobot.hpp"
 #include "logger.hpp"
 
+#include <chrono>
+#include <cstdio>
+#include <ctime>
+#include <string>
+#include <thread>
+#include <atomic>
+#include <atomic>
+#include <csignal>
+#include <iostream>
+#include <chrono>
+#include <ctime>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
+#include <string>
+#include <csignal>
+
 #include "mcuSetting.hpp"
 
 class i2wNode;
@@ -38,6 +56,7 @@ public:
     explicit i2wNode(i2w::Config config)
         : SystemBase(std::move(config))
     {
+        configerLogger();
         std::cout << "i2wNode Constructed\n";
     }
 
@@ -57,6 +76,7 @@ public:
     crawler_i2w_msgs::cmd_vel cmd_vel_;
     crawler_i2w_msgs::cmd_vel current_cmd_vel_;
     i2w::Client<crawler_i2w_services::UiRobotConnectionCheckRequest, crawler_i2w_services::UiRobotConnectionCheckReponse> uiRobotConnectionCheckclient_{};
+    void configerLogger();
 
     float normalize(int16_t value, float max_output);
 
@@ -105,7 +125,7 @@ public:
 
         destination = std::move(client.value());
     }
-        
+
     template <typename RequestT, typename ResponseT, typename ServiceMemberT, typename CallbackT>
     bool advertiseService(
         const std::string &topic,
