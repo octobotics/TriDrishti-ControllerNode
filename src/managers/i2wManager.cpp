@@ -113,12 +113,31 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
                 cmd_vel_.linearVelocity = -normalize(sample.value.axis2, 10 * speed_factor);
                 cmd_vel_.angularVelocity = -normalize(sample.value.axis0, 5 * speed_factor);
                 cmd_vel_.timestamp = static_cast<std::uint64_t>(runtime().clock().now().ns);
+                // cmd val correction value merge
+                cmd_vel_.linearVelocity += current_cmd_vel_correction.linearVelocity;
+                cmd_vel_.angularVelocity += current_cmd_vel_correction.angularVelocity;
+
                 (void)publisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
-                //                std::cout << "Published cmd_vel: linearVelocity -> " << cmd_vel_.linearVelocity << " angularVelocity -> " << cmd_vel_.angularVelocity << std::endl;
+                // std::cout << "Published cmd_vel: linearVelocity -> " << cmd_vel_.linearVelocity << " angularVelocity -> " << cmd_vel_.angularVelocity << std::endl;
             }
         },
         opts);
     sub_ = std::move(subscription.value());
+
+    i2w::SubscriptionOptions optsCmdVelCorrection;
+    optsCmdVelCorrection.plane = i2w::EndpointPlane::Local;
+    optsCmdVelCorrection.reliability = i2w::Reliability::BestEffort;
+    optsCmdVelCorrection.queue_depth = 32;
+    optsCmdVelCorrection.overflow_policy = i2w::OverflowPolicy::DropOldest;
+
+    auto cmd_vel_correction_sub = runtime().subscribe<crawler_i2w_msgs::cmd_vel>(
+        "/cmd_vel_correction",
+        [this](const i2w::Sample<crawler_i2w_msgs::cmd_vel> &sample)
+        {
+            current_cmd_vel_correction = sample.value;
+        },
+        optsCmdVelCorrection);
+    cmd_vel_correction_sub_ = std::move(cmd_vel_correction_sub.value());
 
     i2w::PublisherOptions cmdVelPubOpt;
     cmdVelPubOpt.plane = i2w::EndpointPlane::Local;

@@ -50,6 +50,8 @@ public:
     i2w::LifecycleResult OnTick() noexcept;
     i2w::Publisher<crawler_i2w_msgs::cmd_vel> publisher_{};
     i2w::Subscription<crawler_i2w_msgs::JoyMsgs> sub_{};
+    i2w::Subscription<crawler_i2w_msgs::cmd_vel> cmd_vel_correction_sub_{};
+
     crawler_i2w_msgs::cmd_vel cmd_vel_;
     i2w::Client<crawler_i2w_services::UiRobotConnectionCheckRequest, crawler_i2w_services::UiRobotConnectionCheckReponse> uiRobotConnectionCheckclient_{};
 
@@ -66,10 +68,9 @@ public:
     i2w::Client<crawler_i2w_services::RasterProbStopRequest, crawler_i2w_services::RasterProbStopResponse> rasterProbStopClient_{};
     i2w::Client<crawler_i2w_services::RasterProbMoveRequest, crawler_i2w_services::RasterProbMoveResponse> rasterProbMoveClient_{};
     i2w::Client<crawler_i2w_services::RasterProbHomeRequest, crawler_i2w_services::RasterProbHomeResponse> rasterProbHomeClient_{};
+    crawler_i2w_msgs::cmd_vel current_cmd_vel_correction{};
 
-
-
-void setUiLive(bool live);
+    void setUiLive(bool live);
 
     template <typename RequestType, typename ResponseType, typename ClientType>
     void setupClient(
