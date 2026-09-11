@@ -307,7 +307,23 @@ void i2wNode::publishCmd_Vel()
     cmd_vel_.angularVelocity = current_cmd_vel_correction.angularVelocity + current_cmd_vel_.angularVelocity;
 
     (void)publisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
-    std::cout << "Published cmd_vel: linearVelocity -> " << current_cmd_vel_.linearVelocity << " angularVelocity -> " << current_cmd_vel_.angularVelocity
+
+    LOG_DEBUG(
+        "joy_callback",
+        std::to_string(current_cmd_vel_.linearVelocity) + " " +
+            std::to_string(current_cmd_vel_.angularVelocity));
+
+    LOG_DEBUG(
+        "corrected_cmd_vel_callback",
+        std::to_string(current_cmd_vel_correction.linearVelocity) + " " +
+            std::to_string(current_cmd_vel_correction.angularVelocity));
+
+    LOG_DEBUG(
+        "PublishCmd_Vel",
+        std::to_string(cmd_vel_.linearVelocity) + " " +
+            std::to_string(cmd_vel_.angularVelocity));
+
+     std::cout << "Published cmd_vel: linearVelocity -> " << current_cmd_vel_.linearVelocity << " angularVelocity -> " << current_cmd_vel_.angularVelocity
               << "Published Corrected cmd_vel: linearVelocity -> " << current_cmd_vel_correction.linearVelocity << " angularVelocity -> " << current_cmd_vel_correction.angularVelocity
 
               << std::endl;

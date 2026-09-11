@@ -9,6 +9,7 @@
 #include "crawler_i2w_services/uirobotconnectioncheck.hpp"
 #include "crawler_i2w_services/rasterManualControl.hpp"
 #include "crawler_i2w_services/moveRobot.hpp"
+#include "logger.hpp"
 
 #include "mcuSetting.hpp"
 
