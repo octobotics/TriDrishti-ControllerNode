@@ -110,14 +110,15 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
                     std::cout << "Speed Factor: " << speed_factor << std::endl;
                 }
 
-                cmd_vel_.linearVelocity = -normalize(sample.value.axis2, 10 * speed_factor);
-                cmd_vel_.angularVelocity = -normalize(sample.value.axis0, 5 * speed_factor);
-                cmd_vel_.timestamp = static_cast<std::uint64_t>(runtime().clock().now().ns);
+                current_cmd_vel_.linearVelocity = -normalize(sample.value.axis2, 10 * speed_factor);
+                current_cmd_vel_.angularVelocity = -normalize(sample.value.axis0, 5 * speed_factor);
+                current_cmd_vel_.timestamp = static_cast<std::uint64_t>(runtime().clock().now().ns);
                 // cmd val correction value merge
-                cmd_vel_.linearVelocity += current_cmd_vel_correction.linearVelocity;
-                cmd_vel_.angularVelocity += current_cmd_vel_correction.angularVelocity;
 
-                (void)publisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
+                // cmd_vel_.linearVelocity += current_cmd_vel_correction.linearVelocity;
+                // cmd_vel_.angularVelocity += current_cmd_vel_correction.angularVelocity;
+
+                // (void)publisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
                 // std::cout << "Published cmd_vel: linearVelocity -> " << cmd_vel_.linearVelocity << " angularVelocity -> " << cmd_vel_.angularVelocity << std::endl;
             }
         },
@@ -298,9 +299,24 @@ void i2wNode::setUiLive(bool live)
     // std::cout << "UI live: " << (is_ui_live_ ? "true" : "false") << std::endl;
 }
 
+void i2wNode::publishCmd_Vel()
+{
+    // cmd val correction value merge
+
+    cmd_vel_.linearVelocity = current_cmd_vel_correction.linearVelocity + current_cmd_vel_.linearVelocity;
+    cmd_vel_.angularVelocity = current_cmd_vel_correction.angularVelocity + current_cmd_vel_.angularVelocity;
+
+    (void)publisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
+    std::cout << "Published cmd_vel: linearVelocity -> " << current_cmd_vel_.linearVelocity << " angularVelocity -> " << current_cmd_vel_.angularVelocity
+              << "Published Corrected cmd_vel: linearVelocity -> " << current_cmd_vel_correction.linearVelocity << " angularVelocity -> " << current_cmd_vel_correction.angularVelocity
+
+              << std::endl;
+}
+
 i2w::LifecycleResult i2wNode::OnTick() noexcept
 {
     callUiRobotConnectionCheckService();
+    publishCmd_Vel();
 
     if (!is_ui_live_)
     {
