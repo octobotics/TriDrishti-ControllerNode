@@ -11,6 +11,11 @@ set(CRAWLER_I2W_MSGS_SOURCE_DIR
     CACHE PATH
     "Path to the crawler i2w message package")
 
+message(STATUS "========================================")
+message(STATUS "[i2w] i2w source dir  : ${I2W_SOURCE_DIR}")
+message(STATUS "[crawler-i2w-msgs] crawler-i2w-msgs source dir  : ${I2W_SOURCE_DIR}")
+message(STATUS "========================================")
+
 if(NOT EXISTS "${I2W_SOURCE_DIR}/CMakeLists.txt")
   message(FATAL_ERROR "i2w source not found at '${I2W_SOURCE_DIR}'")
 endif()
@@ -22,6 +27,17 @@ endif()
 add_subdirectory("${I2W_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/i2w")
 add_subdirectory("${CRAWLER_I2W_MSGS_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/crawler_i2w_msgs")
 
+set(LOGGER_SOURCE_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../utils/logger"
+)
+if(NOT EXISTS "${LOGGER_SOURCE_DIR}/CMakeLists.txt")
+  message(FATAL_ERROR "Logger source not found at '${LOGGER_SOURCE_DIR}'")
+endif()    
+add_subdirectory("${LOGGER_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/logger")
+
+message(STATUS "========================================")
+message(STATUS "[Logger] Logger source dir  : ${LOGGER_SOURCE_DIR}")
+message(STATUS "========================================")
 
 add_executable(robot_mcu_node
   src/main.cpp
@@ -37,6 +53,7 @@ target_include_directories(robot_mcu_node PRIVATE
   target_link_libraries(robot_mcu_node PRIVATE
   i2w::i2w
   crawler_i2w_msgs::crawler_i2w_msgs
+  logger
 )
 
 install(TARGETS robot_mcu_node

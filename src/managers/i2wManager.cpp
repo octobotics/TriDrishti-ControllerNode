@@ -146,6 +146,36 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
 
     publisher_ = std::move(publisher.value());
 
+    bool ok = advertiseService<crawler_i2w_services::MoveRobotRequest,
+                               crawler_i2w_services::MoveRobotResponse>(
+        "/move_robot_service",
+        move_robot_service_,
+        [this](const crawler_i2w_services::MoveRobotRequest &request, const i2w::Header &header,
+               crawler_i2w_services::MoveRobotResponse &response)
+        {
+            if (is_ui_live_)
+            {
+                move_robot_client_.call({request.distance, request.speed}, static_cast<std::int64_t>(runtime().clock().now().ns), [](const i2w::Sample<crawler_i2w_services::MoveRobotResponse> &response)
+                                        { std::cout << "Raster Prob Move Right Service Response: " << (response.value.result ? "Success" : "Failure") << std::endl; });
+                response.result = true;
+            }
+            else
+            {
+                std::cout << "Ui is not avaliable, Connent to Ui First" << std::endl;
+            }
+        });
+    if (!ok)
+        return i2w::Fail();
+
+    setupClient<crawler_i2w_services::MoveRobotRequest, crawler_i2w_services::MoveRobotResponse>(
+        runtime(),
+        "/mcu/move_robot_service",
+        move_robot_client_,
+        []
+        {
+            std::cerr << "Failed to create client for /ui_robot_connection_check service\n";
+        });
+
     // Setup a client for the service
     setupClient<crawler_i2w_services::UiRobotConnectionCheckRequest, crawler_i2w_services::UiRobotConnectionCheckReponse>(
         runtime(),

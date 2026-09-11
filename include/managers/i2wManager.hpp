@@ -8,6 +8,7 @@
 #include "crawler_i2w_msgs/robot/cmd_vel.hpp"
 #include "crawler_i2w_services/uirobotconnectioncheck.hpp"
 #include "crawler_i2w_services/rasterManualControl.hpp"
+#include "crawler_i2w_services/moveRobot.hpp"
 
 #include "mcuSetting.hpp"
 
@@ -70,6 +71,8 @@ public:
     i2w::Client<crawler_i2w_services::RasterProbHomeRequest, crawler_i2w_services::RasterProbHomeResponse> rasterProbHomeClient_{};
     crawler_i2w_msgs::cmd_vel current_cmd_vel_correction{};
 
+    i2w::Server<crawler_i2w_services::MoveRobotRequest, crawler_i2w_services::MoveRobotResponse> move_robot_service_;
+    i2w::Client<crawler_i2w_services::MoveRobotRequest, crawler_i2w_services::MoveRobotResponse> move_robot_client_;
     void setUiLive(bool live);
 
     template <typename RequestType, typename ResponseType, typename ClientType>
@@ -98,5 +101,36 @@ public:
         }
 
         destination = std::move(client.value());
+    }
+        
+    template <typename RequestT, typename ResponseT, typename ServiceMemberT, typename CallbackT>
+    bool advertiseService(
+        const std::string &topic,
+        ServiceMemberT &serviceMember,
+        CallbackT &&callback,
+        uint32_t call_timeout_ms = 1000,
+        uint32_t max_requests_per_spin = 100,
+        uint32_t max_responses_per_spin = 100,
+        uint32_t server_queue_depth = 64)
+    {
+        i2w::ServiceOptions options;
+        options.plane = i2w::EndpointPlane::Local;
+        options.reliability = i2w::Reliability::Reliable;
+        options.call_timeout_ms = call_timeout_ms;
+        options.max_requests_per_spin = max_requests_per_spin;
+        options.max_responses_per_spin = max_responses_per_spin;
+        options.server_queue_depth = server_queue_depth;
+
+        auto service = runtime().advertise_service<RequestT, ResponseT>(
+            topic, std::forward<CallbackT>(callback), options);
+
+        if (!service)
+        {
+            // Log("Failed to advertise service: " + topic);
+            return false;
+        }
+
+        serviceMember = std::move(service.value());
+        return true;
     }
 };
