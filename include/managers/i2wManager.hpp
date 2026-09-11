@@ -53,6 +53,7 @@ public:
     i2w::Subscription<crawler_i2w_msgs::cmd_vel> cmd_vel_correction_sub_{};
 
     crawler_i2w_msgs::cmd_vel cmd_vel_;
+    crawler_i2w_msgs::cmd_vel current_cmd_vel_;
     i2w::Client<crawler_i2w_services::UiRobotConnectionCheckRequest, crawler_i2w_services::UiRobotConnectionCheckReponse> uiRobotConnectionCheckclient_{};
 
     float normalize(int16_t value, float max_output);
@@ -71,6 +72,7 @@ public:
     crawler_i2w_msgs::cmd_vel current_cmd_vel_correction{};
 
     void setUiLive(bool live);
+    void publishCmd_Vel();
 
     template <typename RequestType, typename ResponseType, typename ClientType>
     void setupClient(
