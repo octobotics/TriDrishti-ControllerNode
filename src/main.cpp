@@ -23,6 +23,10 @@ int main()
 {
     std::signal(SIGINT, signalHandler);
 
+     auto networkProfileFilePath = std::string(CONFIG_DIR) + "/ecal-network-udp.yaml";
+    
+    std::cout << "Network Profile File Path "<<networkProfileFilePath << std::endl;
+
     std::cout << "Starting Robot..." << std::endl;
 
     Robot::Robot &robot = Robot::Robot::instance();

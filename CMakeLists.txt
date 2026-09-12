@@ -39,6 +39,8 @@ message(STATUS "========================================")
 message(STATUS "[Logger] Logger source dir  : ${LOGGER_SOURCE_DIR}")
 message(STATUS "========================================")
 
+
+
 add_executable(robot_mcu_node
   src/main.cpp
 
@@ -58,3 +60,6 @@ target_include_directories(robot_mcu_node PRIVATE
 
 install(TARGETS robot_mcu_node
   RUNTIME DESTINATION lib/${PROJECT_NAME})
+
+target_compile_definitions(robot_mcu_node PRIVATE
+CONFIG_DIR="${CMAKE_SOURCE_DIR}/config")

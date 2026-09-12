@@ -98,6 +98,8 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
                     {
                         speed_factor = 10;
                     }
+                    publishCmd_Vel_Ui(10, 2.5 * speed_factor, 0, 0, 1);
+
                     std::cout << "Speed Factor: " << speed_factor << std::endl;
                 }
                 if (sample.value.button0)
@@ -107,11 +109,14 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
                     {
                         speed_factor = 1;
                     }
+
+                    publishCmd_Vel_Ui(10, 2.5 * speed_factor, 0, 0, 1);
+
                     std::cout << "Speed Factor: " << speed_factor << std::endl;
                 }
 
-                current_cmd_vel_.linearVelocity = -normalize(sample.value.axis2, 10 * speed_factor);
-                current_cmd_vel_.angularVelocity = -normalize(sample.value.axis0, 5 * speed_factor);
+                current_cmd_vel_.linearVelocity = -normalize(sample.value.axis2, 10);
+                current_cmd_vel_.angularVelocity = -normalize(sample.value.axis0, 2.5 * speed_factor);
                 current_cmd_vel_.timestamp = static_cast<std::uint64_t>(runtime().clock().now().ns);
                 // cmd val correction value merge
 
@@ -143,9 +148,9 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
     i2w::PublisherOptions cmdVelPubOpt;
     cmdVelPubOpt.plane = i2w::EndpointPlane::Local;
 
-    auto publisher = runtime().advertise<crawler_i2w_msgs::cmd_vel>("/cmd_vel", cmdVelPubOpt);
+    auto cmd_velPublisher = runtime().advertise<crawler_i2w_msgs::cmd_vel>("/cmd_vel", cmdVelPubOpt);
 
-    publisher_ = std::move(publisher.value());
+    cmd_velPublisher_ = std::move(cmd_velPublisher.value());
 
     bool ok = advertiseService<crawler_i2w_services::MoveRobotRequest,
                                crawler_i2w_services::MoveRobotResponse>(
@@ -225,6 +230,13 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
             std::cerr << "Failed to create client for /raster_linearActuator_move_service service\n";
         });
 
+    i2w::PublisherOptions cmdVelUiPubOpt;
+    cmdVelUiPubOpt.plane = i2w::EndpointPlane::Local;
+
+    auto cmd_vel_uiPublisher = runtime().advertise<crawler_i2w_msgs::cmd_vel_ui>("/cmd_vel_ui", cmdVelUiPubOpt);
+
+    cmd_vel_uiPublisher_ = std::move(cmd_vel_uiPublisher.value());
+
     return i2w::Ok();
 }
 
@@ -299,6 +311,24 @@ void i2wNode::setUiLive(bool live)
     // std::cout << "UI live: " << (is_ui_live_ ? "true" : "false") << std::endl;
 }
 
+void i2wNode::publishCmd_Vel_Ui(float maxLinear, float maxAngular, float linear, float angular, bool setMaxValue)
+{
+
+    crawler_i2w_msgs::cmd_vel_ui msgs;
+
+    if (setMaxValue)
+    {
+        msgs.maxAngularValocity = maxLinear;
+        msgs.maxAngularValocity = maxAngular;
+    }
+    else
+    {
+        msgs.angularVelocity = angular;
+        msgs.linearVelocity = linear;
+    }
+
+    cmd_vel_uiPublisher_.publish(msgs, static_cast<std::int64_t>(msgs.timestamp));
+}
 void i2wNode::publishCmd_Vel()
 {
     // cmd val correction value merge
@@ -306,7 +336,9 @@ void i2wNode::publishCmd_Vel()
     cmd_vel_.linearVelocity = current_cmd_vel_correction.linearVelocity + current_cmd_vel_.linearVelocity;
     cmd_vel_.angularVelocity = current_cmd_vel_correction.angularVelocity + current_cmd_vel_.angularVelocity;
 
-    (void)publisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
+    (void)cmd_velPublisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
+
+    publishCmd_Vel_Ui(0, 0, cmd_vel_.linearVelocity, cmd_vel_.angularVelocity, 0);
 
     LOG_DEBUG(
         "joy_callback",
@@ -323,7 +355,7 @@ void i2wNode::publishCmd_Vel()
         std::to_string(cmd_vel_.linearVelocity) + " " +
             std::to_string(cmd_vel_.angularVelocity));
 
-     std::cout << "Published cmd_vel: linearVelocity -> " << current_cmd_vel_.linearVelocity << " angularVelocity -> " << current_cmd_vel_.angularVelocity
+    std::cout << "Published cmd_vel: linearVelocity -> " << current_cmd_vel_.linearVelocity << " angularVelocity -> " << current_cmd_vel_.angularVelocity
               << "Published Corrected cmd_vel: linearVelocity -> " << current_cmd_vel_correction.linearVelocity << " angularVelocity -> " << current_cmd_vel_correction.angularVelocity
 
               << std::endl;
@@ -339,7 +371,7 @@ i2w::LifecycleResult i2wNode::OnTick() noexcept
         cmd_vel_.linearVelocity = 0.0f;
         cmd_vel_.angularVelocity = 0.0f;
         cmd_vel_.timestamp = static_cast<std::uint64_t>(runtime().clock().now().ns);
-        (void)publisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
+        (void)cmd_velPublisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
         //      std::cout << "Published cmd_vel: linearVelocity -> " << cmd_vel_.linearVelocity << " angularVelocity -> " << cmd_vel_.angularVelocity << std::endl;
 
         // std::cout << "UI is not live. Stopping the robot." << std::endl;

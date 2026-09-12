@@ -69,7 +69,9 @@ public:
     i2w::LifecycleResult OnSetup() noexcept;
     // it should be onTick
     i2w::LifecycleResult OnTick() noexcept;
-    i2w::Publisher<crawler_i2w_msgs::cmd_vel> publisher_{};
+    i2w::Publisher<crawler_i2w_msgs::cmd_vel> cmd_velPublisher_{};
+
+    i2w::Publisher<crawler_i2w_msgs::cmd_vel_ui> cmd_vel_uiPublisher_;
     i2w::Subscription<crawler_i2w_msgs::JoyMsgs> sub_{};
     i2w::Subscription<crawler_i2w_msgs::cmd_vel> cmd_vel_correction_sub_{};
 
@@ -77,6 +79,7 @@ public:
     crawler_i2w_msgs::cmd_vel current_cmd_vel_;
     i2w::Client<crawler_i2w_services::UiRobotConnectionCheckRequest, crawler_i2w_services::UiRobotConnectionCheckReponse> uiRobotConnectionCheckclient_{};
     void configerLogger();
+void publishCmd_Vel_Ui(float maxLinear, float maxAngular, float linear, float angular, bool setMaxValue);
 
     float normalize(int16_t value, float max_output);
 
