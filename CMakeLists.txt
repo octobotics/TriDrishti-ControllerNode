@@ -39,6 +39,9 @@ message(STATUS "========================================")
 message(STATUS "[Logger] Logger source dir  : ${LOGGER_SOURCE_DIR}")
 message(STATUS "========================================")
 
+find_package(behaviortree_cpp REQUIRED)
+find_package(behaviortree_cpp_v3 REQUIRED)
+
 
 
 add_executable(robot_mcu_node
@@ -56,6 +59,8 @@ target_include_directories(robot_mcu_node PRIVATE
   i2w::i2w
   crawler_i2w_msgs::crawler_i2w_msgs
   logger
+  behaviortree_cpp
+  behaviortree_cpp_v3
 )
 
 install(TARGETS robot_mcu_node

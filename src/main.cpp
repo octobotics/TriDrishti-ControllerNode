@@ -6,6 +6,9 @@
 #include <iostream>
 #include <i2w/impl.hpp>
 // #include <logger.hpp>
+#include <behaviortree_cpp/action_node.h>
+#include <behaviortree_cpp_v3/action_node.h>
+
 
 #include "robot/robot.hpp"
 
@@ -23,7 +26,7 @@ int main()
 {
     std::signal(SIGINT, signalHandler);
 
-     auto networkProfileFilePath = std::string(CONFIG_DIR) + "/ecal-network-udp.yaml";
+    auto networkProfileFilePath = std::string(CONFIG_DIR) + "/ecal-network-udp.yaml";
     
     std::cout << "Network Profile File Path "<<networkProfileFilePath << std::endl;
 
@@ -42,10 +45,6 @@ int main()
 
     robot.stop();
 
-    // Logger::getInstance().configure(Logger::LogLevel::DEBUG, "robot.log", false);
-    // Logger &log = Logger::getInstance();
-
-    // LOG_DEBUG("Main", "Robot Entry Point... ");
 
     return 0;
 }
