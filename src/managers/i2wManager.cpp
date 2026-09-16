@@ -110,9 +110,23 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
                     std::cout << "Speed Factor: " << speed_factor << std::endl;
                 }
 
-                current_cmd_vel_.linearVelocity = -normalize(sample.value.axis2, 10 * speed_factor);
-                current_cmd_vel_.angularVelocity = -normalize(sample.value.axis0, 5 * speed_factor);
+                current_cmd_vel_.linearVelocity = -normalize(sample.value.axis2, 10);
+                current_cmd_vel_.angularVelocity = -normalize(sample.value.axis0, 2.5 * speed_factor);
                 current_cmd_vel_.timestamp = static_cast<std::uint64_t>(runtime().clock().now().ns);
+
+                if (current_cmd_vel_.linearVelocity > -1.0f &&
+                    current_cmd_vel_.linearVelocity < 1.0f)
+                {
+                    current_cmd_vel_.linearVelocity = 0.0f;
+                }
+
+                 if (current_cmd_vel_.angularVelocity > -1.0f &&
+                    current_cmd_vel_.angularVelocity < 1.0f)
+                {
+                    current_cmd_vel_.angularVelocity = 0.0f;
+                }
+
+
                 // cmd val correction value merge
 
                 // cmd_vel_.linearVelocity += current_cmd_vel_correction.linearVelocity;
@@ -323,7 +337,7 @@ void i2wNode::publishCmd_Vel()
         std::to_string(cmd_vel_.linearVelocity) + " " +
             std::to_string(cmd_vel_.angularVelocity));
 
-     std::cout << "Published cmd_vel: linearVelocity -> " << current_cmd_vel_.linearVelocity << " angularVelocity -> " << current_cmd_vel_.angularVelocity
+    std::cout << "Published cmd_vel: linearVelocity -> " << current_cmd_vel_.linearVelocity << " angularVelocity -> " << current_cmd_vel_.angularVelocity
               << "Published Corrected cmd_vel: linearVelocity -> " << current_cmd_vel_correction.linearVelocity << " angularVelocity -> " << current_cmd_vel_correction.angularVelocity
 
               << std::endl;
