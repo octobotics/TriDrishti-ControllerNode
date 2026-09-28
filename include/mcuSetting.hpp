@@ -5,5 +5,5 @@
 class McuSetting
 {
 public:
-    static constexpr bool isWatchDogEnable = false;
+    static constexpr bool isWatchDogEnable = true;
 };

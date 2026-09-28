@@ -97,6 +97,7 @@ public:
     i2w::Client<crawler_i2w_services::MoveRobotRequest, crawler_i2w_services::MoveRobotResponse> move_robot_client_;
     void setUiLive(bool live);
     void publishCmd_Vel();
+    bool isConnected();
 
     template <typename RequestType, typename ResponseType, typename ClientType>
     void setupClient(

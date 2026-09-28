@@ -120,7 +120,7 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
                     current_cmd_vel_.linearVelocity = 0.0f;
                 }
 
-                 if (current_cmd_vel_.angularVelocity > -1.0f &&
+                if (current_cmd_vel_.angularVelocity > -1.0f &&
                     current_cmd_vel_.angularVelocity < 1.0f)
                 {
                     current_cmd_vel_.angularVelocity = 0.0f;
@@ -242,64 +242,82 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
     return i2w::Ok();
 }
 
+bool i2wNode::isConnected()
+{
+    std::string host = "192.168.0.195";
+    std::string command = "setsid ping -c 1 -W 1 " + host + " > /dev/null 2>&1";
+    int result = system(command.c_str());
+    return (result == 0);
+}
+
 void i2wNode::callUiRobotConnectionCheckService()
 {
-    const auto now = std::chrono::steady_clock::now();
+    // const auto now = std::chrono::steady_clock::now();
 
-    // Timeout check.
-    if (waiting_for_response_ && now >= response_deadline_)
+    // // Timeout check.
+    // if (waiting_for_response_ && now >= response_deadline_)
+    // {
+    //     waiting_for_response_ = false;
+    //     setUiLive(false);
+    // }
+
+    // if (now < next_call_)
+    // {
+    //     return;
+    // }
+
+    // next_call_ = now + std::chrono::milliseconds(500);
+
+    // crawler_i2w_services::UiRobotConnectionCheckRequest request;
+    // request.ping = 1;
+    // request.timestamp = static_cast<std::uint64_t>(runtime().clock().now().ns);
+
+    // if (McuSetting::isWatchDogEnable)
+    // {
+    //     const auto result = uiRobotConnectionCheckclient_.call(
+    //         request, runtime().clock().now().ns,
+    //         [this](const i2w::Sample<crawler_i2w_services::UiRobotConnectionCheckReponse> &sample)
+    //         {
+    //             if (sample.value.pong)
+    //             {
+    //                 waiting_for_response_ = false;
+    //                 setUiLive(true);
+    //             }
+    //             else
+    //             {
+    //                 waiting_for_response_ = false;
+    //                 setUiLive(false);
+    //             }
+
+    //             std::cout << "UI Robot Connection Check Service Response: " << (sample.value.pong ? "Success" : "Failure") << std::endl;
+    //         });
+
+    //     if (!result)
+    //     {
+    //         waiting_for_response_ = false;
+    //         setUiLive(false);
+    //         return;
+    //     }
+    // }
+    // else
+    // {
+    //     // std::cout << "Watchdog is disabled. Skipping UI connection check." << std::endl;
+    //     waiting_for_response_ = false;
+    //     setUiLive(true);
+    // }
+
+    // waiting_for_response_ = true;
+    // response_deadline_ = now + std::chrono::milliseconds(1000);
+
+    is_ui_live_ = isConnected();
+    if (is_ui_live_)
     {
-        waiting_for_response_ = false;
-        setUiLive(false);
-    }
-
-    if (now < next_call_)
-    {
-        return;
-    }
-
-    next_call_ = now + std::chrono::milliseconds(500);
-
-    crawler_i2w_services::UiRobotConnectionCheckRequest request;
-    request.ping = 1;
-    request.timestamp = static_cast<std::uint64_t>(runtime().clock().now().ns);
-
-    if (McuSetting::isWatchDogEnable)
-    {
-        const auto result = uiRobotConnectionCheckclient_.call(
-            request, runtime().clock().now().ns,
-            [this](const i2w::Sample<crawler_i2w_services::UiRobotConnectionCheckReponse> &sample)
-            {
-                if (sample.value.pong)
-                {
-                    waiting_for_response_ = false;
-                    setUiLive(true);
-                }
-                else
-                {
-                    waiting_for_response_ = false;
-                    setUiLive(false);
-                }
-
-                std::cout << "UI Robot Connection Check Service Response: " << (sample.value.pong ? "Success" : "Failure") << std::endl;
-            });
-
-        if (!result)
-        {
-            waiting_for_response_ = false;
-            setUiLive(false);
-            return;
-        }
+        std::cout << "Connected" << std::endl;
     }
     else
     {
-        // std::cout << "Watchdog is disabled. Skipping UI connection check." << std::endl;
-        waiting_for_response_ = false;
-        setUiLive(true);
+        std::cout << "Not Connected" << std::endl;
     }
-
-    waiting_for_response_ = true;
-    response_deadline_ = now + std::chrono::milliseconds(1000);
 }
 
 void i2wNode::setUiLive(bool live)
