@@ -209,7 +209,9 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
                crawler_i2w_services::ControlModeSwitchingResponse &response)
         {
             LOG_INFO("ControlModeSwitching Service", "Control Mode Switching Request");
+            response = {};
             response.success = 1;
+            response.active_mode = static_cast<std::uint8_t>(current_mode);
 
             if (request.requested_mode == crawler_i2w_services::ControlMode::kControlModeManualJoy && current_mode != ControlModeType::ManualJoy)
             {
@@ -219,7 +221,7 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
 
                 LOG_INFO("ControlModeSwitching Service", "Set Control Mode to Manual Joy");
             }
-            if (request.requested_mode == crawler_i2w_services::ControlMode::kControlModeAutoMission && current_mode != ControlModeType::AutoMission)
+            else if (request.requested_mode == crawler_i2w_services::ControlMode::kControlModeAutoMission && current_mode != ControlModeType::AutoMission)
             {
                 current_mode = ControlModeType::AutoMission;
                 response.active_mode = crawler_i2w_services::ControlMode::kControlModeAutoMission;
@@ -227,11 +229,46 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
 
                 LOG_INFO("ControlModeSwitching Service", "Set Control Mode to Auto Mission");
             }
+            else
+            {
+                // Keep current_mode and active_mode unchanged.
+                response.success = 1U;
+
+                LOG_ERROR("ControlModeSwitching Service", "Invalid requested control mode");
+            }
+
 
             response.timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
                                         std::chrono::system_clock::now().time_since_epoch())
                                         .count();
         });
+    if (!ok)
+        return i2w::Fail();
+
+    ok = advertiseService<
+        crawler_i2w_services::ControlModeStatusRequest,
+        crawler_i2w_services::ControlModeStatusResponse>(
+        "/controller/control_mode_status",
+        control_mode_status_service_,
+        [this](
+            const crawler_i2w_services::ControlModeStatusRequest&,
+            const i2w::Header&,
+            crawler_i2w_services::ControlModeStatusResponse& response)
+        {
+            response = {};
+            response.success = 0U;  // Existing inverted convention: success.
+            response.active_mode = static_cast<std::uint8_t>(current_mode);
+
+            std::snprintf(
+                response.message.data(), response.message.size(),
+                "control mode query successful");
+
+            response.timestamp_ns =
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::system_clock::now().time_since_epoch())
+                    .count();
+        });
+
     if (!ok)
         return i2w::Fail();
 

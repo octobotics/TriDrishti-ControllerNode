@@ -88,6 +88,7 @@ public:
     // service server
     i2w::Server<crawler_i2w_services::MoveRobotRequest, crawler_i2w_services::MoveRobotResponse> move_robot_service_;
     i2w::Server<crawler_i2w_services::ControlModeSwitchingRequest, crawler_i2w_services::ControlModeSwitchingResponse> control_mode_switching_service_;
+    i2w::Server<crawler_i2w_services::ControlModeStatusRequest,crawler_i2w_services::ControlModeStatusResponse> control_mode_status_service_;
 
     // service client
     i2w::Client<crawler_i2w_services::RasterLinearActuatorMoveRequest, crawler_i2w_services::RasterLinearActuatorMoveResponse> rasterLinearActuatorMoveClient_{};
