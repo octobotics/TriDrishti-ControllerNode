@@ -2,18 +2,18 @@
 
 i2wManager::i2wManager()
 {
-    std::cout << "Initializing i2w Manager\n";
+    LOG_INFO("i2wManager", "Constructor");
 }
 
 i2wManager::~i2wManager()
 {
     dispose();
-    std::cout << "i2w Manager Closed\n";
+    LOG_INFO("i2wManager", "Disconstructor");
 }
 
 void i2wManager::config()
 {
-    std::cout << "Configuring MCU Node\n";
+    LOG_INFO("i2wManager", "Configuring MCU Node");
 
     m_robotMcuConfig.node_name = "robotMcu";
     m_robotMcuConfig.ns = "";
@@ -23,7 +23,8 @@ void i2wManager::config()
 
 void i2wManager::init()
 {
-    std::cout << "Initializing MCU Node\n";
+
+    LOG_INFO("i2wManager", "Initializing MCU Node");
 
     m_robotMcuNode = std::make_unique<i2wNode>(m_robotMcuConfig);
 }
@@ -58,12 +59,14 @@ void i2wManager::dispose()
 
 i2w::LifecycleResult i2wNode::OnSetup() noexcept
 {
-    std::cout << "i2wNode::OnSetup()" << std::endl;
+    LOG_INFO("i2wNode", "OnSetup");
+
     i2w::SubscriptionOptions opts;
     opts.plane = i2w::EndpointPlane::Local;
     opts.reliability = i2w::Reliability::BestEffort;
     opts.queue_depth = 32;
     opts.overflow_policy = i2w::OverflowPolicy::DropOldest;
+
     auto subscription = runtime().subscribe<crawler_i2w_msgs::JoyMsgs>(
         "/joy",
         [this](const i2w::Sample<crawler_i2w_msgs::JoyMsgs> &sample)
@@ -98,6 +101,8 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
                     {
                         speed_factor = 10;
                     }
+                    publishCmd_Vel_Ui(10, 2.5 * speed_factor, 0, 0, 1);
+
                     std::cout << "Speed Factor: " << speed_factor << std::endl;
                 }
                 if (sample.value.button0)
@@ -107,6 +112,9 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
                     {
                         speed_factor = 1;
                     }
+
+                    publishCmd_Vel_Ui(10, 2.5 * speed_factor, 0, 0, 1);
+
                     std::cout << "Speed Factor: " << speed_factor << std::endl;
                 }
 
@@ -154,12 +162,23 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
         optsCmdVelCorrection);
     cmd_vel_correction_sub_ = std::move(cmd_vel_correction_sub.value());
 
+    // mission cmd_vel
+
+    auto cmd_vel_mission_sub = runtime().subscribe<crawler_i2w_msgs::cmd_vel>(
+        "/mission/cmd_vel",
+        [this](const i2w::Sample<crawler_i2w_msgs::cmd_vel> &sample)
+        {
+            current_cmd_vel_misssion = sample.value;
+        },
+        optsCmdVelCorrection);
+    cmd_vel_mission_sub_ = std::move(cmd_vel_mission_sub.value());
+
     i2w::PublisherOptions cmdVelPubOpt;
     cmdVelPubOpt.plane = i2w::EndpointPlane::Local;
 
-    auto publisher = runtime().advertise<crawler_i2w_msgs::cmd_vel>("/cmd_vel", cmdVelPubOpt);
+    auto cmd_velPublisher = runtime().advertise<crawler_i2w_msgs::cmd_vel>("/cmd_vel", cmdVelPubOpt);
 
-    publisher_ = std::move(publisher.value());
+    cmd_velPublisher_ = std::move(cmd_velPublisher.value());
 
     bool ok = advertiseService<crawler_i2w_services::MoveRobotRequest,
                                crawler_i2w_services::MoveRobotResponse>(
@@ -178,6 +197,40 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
             {
                 std::cout << "Ui is not avaliable, Connent to Ui First" << std::endl;
             }
+        });
+    if (!ok)
+        return i2w::Fail();
+
+    ok = advertiseService<crawler_i2w_services::ControlModeSwitchingRequest,
+                          crawler_i2w_services::ControlModeSwitchingResponse>(
+        "/controller/control_mode",
+        control_mode_switching_service_,
+        [this](const crawler_i2w_services::ControlModeSwitchingRequest &request, const i2w::Header &header,
+               crawler_i2w_services::ControlModeSwitchingResponse &response)
+        {
+            LOG_INFO("ControlModeSwitching Service", "Control Mode Switching Request");
+            response.success = 1;
+
+            if (request.requested_mode == crawler_i2w_services::ControlMode::kControlModeManualJoy && current_mode != ControlModeType::ManualJoy)
+            {
+                current_mode = ControlModeType::ManualJoy;
+                response.active_mode = crawler_i2w_services::ControlMode::kControlModeManualJoy;
+                response.success = 0;
+
+                LOG_INFO("ControlModeSwitching Service", "Set Control Mode to Manual Joy");
+            }
+            if (request.requested_mode == crawler_i2w_services::ControlMode::kControlModeAutoMission && current_mode != ControlModeType::AutoMission)
+            {
+                current_mode = ControlModeType::AutoMission;
+                response.active_mode = crawler_i2w_services::ControlMode::kControlModeAutoMission;
+                response.success = 0;
+
+                LOG_INFO("ControlModeSwitching Service", "Set Control Mode to Auto Mission");
+            }
+
+            response.timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                        std::chrono::system_clock::now().time_since_epoch())
+                                        .count();
         });
     if (!ok)
         return i2w::Fail();
@@ -238,6 +291,13 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
         {
             std::cerr << "Failed to create client for /raster_linearActuator_move_service service\n";
         });
+
+    i2w::PublisherOptions cmdVelUiPubOpt;
+    cmdVelUiPubOpt.plane = i2w::EndpointPlane::Local;
+
+    auto cmd_vel_uiPublisher = runtime().advertise<crawler_i2w_msgs::cmd_vel_ui>("/cmd_vel_ui", cmdVelUiPubOpt);
+
+    cmd_vel_uiPublisher_ = std::move(cmd_vel_uiPublisher.value());
 
     return i2w::Ok();
 }
@@ -331,34 +391,65 @@ void i2wNode::setUiLive(bool live)
     // std::cout << "UI live: " << (is_ui_live_ ? "true" : "false") << std::endl;
 }
 
+void i2wNode::publishCmd_Vel_Ui(float maxLinear, float maxAngular, float linear, float angular, bool setMaxValue)
+{
+
+    crawler_i2w_msgs::cmd_vel_ui msgs;
+
+    if (setMaxValue)
+    {
+        msgs.maxAngularValocity = maxLinear;
+        msgs.maxAngularValocity = maxAngular;
+    }
+    else
+    {
+        msgs.angularVelocity = angular;
+        msgs.linearVelocity = linear;
+    }
+
+    cmd_vel_uiPublisher_.publish(msgs, static_cast<std::int64_t>(msgs.timestamp));
+}
 void i2wNode::publishCmd_Vel()
 {
     // cmd val correction value merge
 
-    cmd_vel_.linearVelocity = current_cmd_vel_correction.linearVelocity + current_cmd_vel_.linearVelocity;
-    cmd_vel_.angularVelocity = current_cmd_vel_correction.angularVelocity + current_cmd_vel_.angularVelocity;
+    if (current_mode == i2wNode::ControlModeType::ManualJoy)
+    {
+        cmd_vel_.linearVelocity = current_cmd_vel_correction.linearVelocity + current_cmd_vel_.linearVelocity;
+        cmd_vel_.angularVelocity = current_cmd_vel_correction.angularVelocity + current_cmd_vel_.angularVelocity;
+    }
 
-    (void)publisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
+    if (current_mode == i2wNode::ControlModeType::AutoMission)
+    {
+        cmd_vel_.linearVelocity = current_cmd_vel_correction.linearVelocity + current_cmd_vel_misssion.linearVelocity;
+        cmd_vel_.angularVelocity = current_cmd_vel_correction.angularVelocity + current_cmd_vel_misssion.angularVelocity;
+    }
 
-    LOG_DEBUG(
-        "joy_callback",
-        std::to_string(current_cmd_vel_.linearVelocity) + " " +
-            std::to_string(current_cmd_vel_.angularVelocity));
+    (void)cmd_velPublisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
 
-    LOG_DEBUG(
-        "corrected_cmd_vel_callback",
-        std::to_string(current_cmd_vel_correction.linearVelocity) + " " +
-            std::to_string(current_cmd_vel_correction.angularVelocity));
+    publishCmd_Vel_Ui(0, 0, cmd_vel_.linearVelocity, cmd_vel_.angularVelocity, 0);
 
-    LOG_DEBUG(
-        "PublishCmd_Vel",
-        std::to_string(cmd_vel_.linearVelocity) + " " +
-            std::to_string(cmd_vel_.angularVelocity));
+    // LOG_DEBUG(
+    //     "joy_callback",
+    //     std::to_string(current_cmd_vel_.linearVelocity) + " " +
+    //         std::to_string(current_cmd_vel_.angularVelocity));
 
+    // LOG_DEBUG(
+    //     "corrected_cmd_vel_callback",
+    //     std::to_string(current_cmd_vel_correction.linearVelocity) + " " +
+    //         std::to_string(current_cmd_vel_correction.angularVelocity));
+
+    // LOG_INFO(
+    //     "PublishCmd_Vel",
+    //     std::to_string(cmd_vel_.linearVelocity) + " " +
+    //         std::to_string(cmd_vel_.angularVelocity));
+
+    // std::cout << "Published cmd_vel: linearVelocity -> " << current_cmd_vel_.linearVelocity << " angularVelocity -> " << current_cmd_vel_.angularVelocity
+    //           << "Published Corrected cmd_vel: linearVelocity -> " << current_cmd_vel_correction.linearVelocity << " angularVelocity -> " << current_cmd_vel_correction.angularVelocity
     std::cout << "Published cmd_vel: linearVelocity -> " << current_cmd_vel_.linearVelocity << " angularVelocity -> " << current_cmd_vel_.angularVelocity
               << "Published Corrected cmd_vel: linearVelocity -> " << current_cmd_vel_correction.linearVelocity << " angularVelocity -> " << current_cmd_vel_correction.angularVelocity
 
-              << std::endl;
+    //           << std::endl;
 }
 
 i2w::LifecycleResult i2wNode::OnTick() noexcept
@@ -371,7 +462,7 @@ i2w::LifecycleResult i2wNode::OnTick() noexcept
         cmd_vel_.linearVelocity = 0.0f;
         cmd_vel_.angularVelocity = 0.0f;
         cmd_vel_.timestamp = static_cast<std::uint64_t>(runtime().clock().now().ns);
-        (void)publisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
+        (void)cmd_velPublisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
         //      std::cout << "Published cmd_vel: linearVelocity -> " << cmd_vel_.linearVelocity << " angularVelocity -> " << cmd_vel_.angularVelocity << std::endl;
 
         // std::cout << "UI is not live. Stopping the robot." << std::endl;
@@ -384,55 +475,4 @@ float i2wNode::normalize(int16_t value, float max_output)
 {
 
     return (static_cast<float>(value) / 32767.0f) * max_output;
-}
-
-void i2wNode::configerLogger()
-{
-    // Get current time
-    auto now = std::chrono::system_clock::now();
-    std::time_t time = std::chrono::system_clock::to_time_t(now);
-
-    std::tm localTime = *std::localtime(&time);
-
-    // Get current user's home directory
-    const char *home = std::getenv("HOME");
-
-    std::ostringstream timestamp;
-    timestamp << std::put_time(&localTime, "%Y%m%d_%H%M%S");
-
-    std::string value = timestamp.str();
-
-    // Create date directory: 27_sep_2016
-    std::ostringstream date;
-    date << std::put_time(&localTime, "%d_%b_%Y");
-
-    std::string logDir = std::string(home) + "/logs/mcu_i2w/" + date.str();
-
-    // Create directory if it doesn't exist
-    std::filesystem::create_directories(logDir);
-
-    // Create log file
-    std::string logFile = logDir + "/" + value + ".log";
-
-    std::ofstream file(logFile, std::ios::app);
-
-    // if (!file.is_open())
-    // {
-    //     return 1;
-    // }
-
-    // file << "Log file created/opened\n";
-
-    // file.close();
-
-    // default folder ($HOME/log/robot.log)
-
-    // Logger::getInstance().configure(Logger::LogLevel::DEBUG, "robot.log", false);
-
-    // Pass an absolute path directly as the filename, no logDir needed
-
-    Logger::getInstance().configure(Logger::LogLevel::DEBUG, logFile, false, "", false);
-    auto &log = Logger::getInstance();
-
-    LOG_DEBUG("Main", "init");
 }

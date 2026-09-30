@@ -6,6 +6,9 @@
 #include <iostream>
 #include <i2w/impl.hpp>
 // #include <logger.hpp>
+#include <behaviortree_cpp/action_node.h>
+#include <behaviortree_cpp_v3/action_node.h>
+#include "mcuLogger.hpp"
 
 #include "robot/robot.hpp"
 
@@ -23,7 +26,13 @@ int main()
 {
     std::signal(SIGINT, signalHandler);
 
-    std::cout << "Starting Robot..." << std::endl;
+    mcu::MCULogger::init("mcu");
+
+    auto networkProfileFilePath = std::string(CONFIG_DIR) + "/ecal-network-udp.yaml";
+
+    std::cout << "Network Profile File Path " << networkProfileFilePath << std::endl;
+
+    LOG_INFO("main", "Starting Robot...");
 
     Robot::Robot &robot = Robot::Robot::instance();
     robot.start();
@@ -34,14 +43,9 @@ int main()
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
 
-    std::cout << "\nStopping Robot..." << std::endl;
+    LOG_INFO("main", "Stopping Robot...");
 
     robot.stop();
-
-    // Logger::getInstance().configure(Logger::LogLevel::DEBUG, "robot.log", false);
-    // Logger &log = Logger::getInstance();
-
-    // LOG_DEBUG("Main", "Robot Entry Point... ");
 
     return 0;
 }
