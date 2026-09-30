@@ -62,12 +62,12 @@ public:
     explicit i2wNode(i2w::Config config)
         : SystemBase(std::move(config))
     {
-        std::cout << "i2wNode Constructed\n";
+       LOG_INFO("i2wNode","Constructor");
     }
 
     ~i2wNode()
     {
-        std::cout << "i2wNode Destroyed\n";
+       LOG_INFO("i2wNode","Disconstructor");
     }
 
     i2w::LifecycleResult OnSetup() noexcept;

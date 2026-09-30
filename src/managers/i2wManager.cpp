@@ -2,18 +2,18 @@
 
 i2wManager::i2wManager()
 {
-    std::cout << "Initializing i2w Manager\n";
+    LOG_INFO("i2wManager", "Constructor");
 }
 
 i2wManager::~i2wManager()
 {
     dispose();
-    std::cout << "i2w Manager Closed\n";
+    LOG_INFO("i2wManager", "Disconstructor");
 }
 
 void i2wManager::config()
 {
-    std::cout << "Configuring MCU Node\n";
+    LOG_INFO("i2wManager", "Configuring MCU Node");
 
     m_robotMcuConfig.node_name = "robotMcu";
     m_robotMcuConfig.ns = "";
@@ -23,7 +23,8 @@ void i2wManager::config()
 
 void i2wManager::init()
 {
-    std::cout << "Initializing MCU Node\n";
+
+    LOG_INFO("i2wManager", "Initializing MCU Node");
 
     m_robotMcuNode = std::make_unique<i2wNode>(m_robotMcuConfig);
 }
@@ -58,7 +59,8 @@ void i2wManager::dispose()
 
 i2w::LifecycleResult i2wNode::OnSetup() noexcept
 {
-    std::cout << "i2wNode::OnSetup()" << std::endl;
+    LOG_INFO("i2wNode", "OnSetup");
+
     i2w::SubscriptionOptions opts;
     opts.plane = i2w::EndpointPlane::Local;
     opts.reliability = i2w::Reliability::BestEffort;
@@ -405,10 +407,10 @@ void i2wNode::publishCmd_Vel()
     //     std::to_string(current_cmd_vel_correction.linearVelocity) + " " +
     //         std::to_string(current_cmd_vel_correction.angularVelocity));
 
-    LOG_INFO(
-        "PublishCmd_Vel",
-        std::to_string(cmd_vel_.linearVelocity) + " " +
-            std::to_string(cmd_vel_.angularVelocity));
+    // LOG_INFO(
+    //     "PublishCmd_Vel",
+    //     std::to_string(cmd_vel_.linearVelocity) + " " +
+    //         std::to_string(cmd_vel_.angularVelocity));
 
     // std::cout << "Published cmd_vel: linearVelocity -> " << current_cmd_vel_.linearVelocity << " angularVelocity -> " << current_cmd_vel_.angularVelocity
     //           << "Published Corrected cmd_vel: linearVelocity -> " << current_cmd_vel_correction.linearVelocity << " angularVelocity -> " << current_cmd_vel_correction.angularVelocity
