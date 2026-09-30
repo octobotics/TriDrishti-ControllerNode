@@ -56,7 +56,6 @@ public:
     explicit i2wNode(i2w::Config config)
         : SystemBase(std::move(config))
     {
-        configerLogger();
         std::cout << "i2wNode Constructed\n";
     }
 

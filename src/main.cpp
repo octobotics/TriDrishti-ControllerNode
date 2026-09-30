@@ -8,6 +8,7 @@
 // #include <logger.hpp>
 #include <behaviortree_cpp/action_node.h>
 #include <behaviortree_cpp_v3/action_node.h>
+#include "mcuLogger.hpp"
 
 
 #include "robot/robot.hpp"
@@ -25,6 +26,9 @@ namespace
 int main()
 {
     std::signal(SIGINT, signalHandler);
+
+        mcu::MCULogger::init("mcu");
+
 
     auto networkProfileFilePath = std::string(CONFIG_DIR) + "/ecal-network-udp.yaml";
     
