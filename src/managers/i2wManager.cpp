@@ -449,7 +449,7 @@ void i2wNode::publishCmd_Vel()
     std::cout << "Published cmd_vel: linearVelocity -> " << current_cmd_vel_.linearVelocity << " angularVelocity -> " << current_cmd_vel_.angularVelocity
               << "Published Corrected cmd_vel: linearVelocity -> " << current_cmd_vel_correction.linearVelocity << " angularVelocity -> " << current_cmd_vel_correction.angularVelocity
 
-    //           << std::endl;
+              << std::endl;
 }
 
 i2w::LifecycleResult i2wNode::OnTick() noexcept
