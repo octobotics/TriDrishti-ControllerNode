@@ -64,6 +64,7 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
     opts.reliability = i2w::Reliability::BestEffort;
     opts.queue_depth = 32;
     opts.overflow_policy = i2w::OverflowPolicy::DropOldest;
+
     auto subscription = runtime().subscribe<crawler_i2w_msgs::JoyMsgs>(
         "/joy",
         [this](const i2w::Sample<crawler_i2w_msgs::JoyMsgs> &sample)
@@ -145,6 +146,17 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
         optsCmdVelCorrection);
     cmd_vel_correction_sub_ = std::move(cmd_vel_correction_sub.value());
 
+    // mission cmd_vel
+
+    auto cmd_vel_mission_sub = runtime().subscribe<crawler_i2w_msgs::cmd_vel>(
+        "/mission/cmd_vel",
+        [this](const i2w::Sample<crawler_i2w_msgs::cmd_vel> &sample)
+        {
+            current_cmd_vel_misssion = sample.value;
+        },
+        optsCmdVelCorrection);
+    cmd_vel_mission_sub_ = std::move(cmd_vel_mission_sub.value());
+
     i2w::PublisherOptions cmdVelPubOpt;
     cmdVelPubOpt.plane = i2w::EndpointPlane::Local;
 
@@ -169,6 +181,40 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
             {
                 std::cout << "Ui is not avaliable, Connent to Ui First" << std::endl;
             }
+        });
+    if (!ok)
+        return i2w::Fail();
+
+    ok = advertiseService<crawler_i2w_services::ControlModeSwitchingRequest,
+                          crawler_i2w_services::ControlModeSwitchingResponse>(
+        "/controller/control_mode",
+        control_mode_switching_service_,
+        [this](const crawler_i2w_services::ControlModeSwitchingRequest &request, const i2w::Header &header,
+               crawler_i2w_services::ControlModeSwitchingResponse &response)
+        {
+            LOG_INFO("ControlModeSwitching Service", "Control Mode Switching Request");
+            response.success = 1;
+
+            if (request.requested_mode == crawler_i2w_services::ControlMode::kControlModeManualJoy && current_mode != ControlModeType::ManualJoy)
+            {
+                current_mode = ControlModeType::ManualJoy;
+                response.active_mode = crawler_i2w_services::ControlMode::kControlModeManualJoy;
+                response.success = 0;
+
+                LOG_INFO("ControlModeSwitching Service", "Set Control Mode to Manual Joy");
+            }
+            if (request.requested_mode == crawler_i2w_services::ControlMode::kControlModeAutoMission && current_mode != ControlModeType::AutoMission)
+            {
+                current_mode = ControlModeType::AutoMission;
+                response.active_mode = crawler_i2w_services::ControlMode::kControlModeAutoMission;
+                response.success = 0;
+
+                LOG_INFO("ControlModeSwitching Service", "Set Control Mode to Auto Mission");
+            }
+
+            response.timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                        std::chrono::system_clock::now().time_since_epoch())
+                                        .count();
         });
     if (!ok)
         return i2w::Fail();
@@ -333,32 +379,41 @@ void i2wNode::publishCmd_Vel()
 {
     // cmd val correction value merge
 
-    cmd_vel_.linearVelocity = current_cmd_vel_correction.linearVelocity + current_cmd_vel_.linearVelocity;
-    cmd_vel_.angularVelocity = current_cmd_vel_correction.angularVelocity + current_cmd_vel_.angularVelocity;
+    if (current_mode == i2wNode::ControlModeType::ManualJoy)
+    {
+        cmd_vel_.linearVelocity = current_cmd_vel_correction.linearVelocity + current_cmd_vel_.linearVelocity;
+        cmd_vel_.angularVelocity = current_cmd_vel_correction.angularVelocity + current_cmd_vel_.angularVelocity;
+    }
+
+    if (current_mode == i2wNode::ControlModeType::AutoMission)
+    {
+        cmd_vel_.linearVelocity = current_cmd_vel_correction.linearVelocity + current_cmd_vel_misssion.linearVelocity;
+        cmd_vel_.angularVelocity = current_cmd_vel_correction.angularVelocity + current_cmd_vel_misssion.angularVelocity;
+    }
 
     (void)cmd_velPublisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
 
     publishCmd_Vel_Ui(0, 0, cmd_vel_.linearVelocity, cmd_vel_.angularVelocity, 0);
 
-    LOG_DEBUG(
-        "joy_callback",
-        std::to_string(current_cmd_vel_.linearVelocity) + " " +
-            std::to_string(current_cmd_vel_.angularVelocity));
+    // LOG_DEBUG(
+    //     "joy_callback",
+    //     std::to_string(current_cmd_vel_.linearVelocity) + " " +
+    //         std::to_string(current_cmd_vel_.angularVelocity));
 
-    LOG_DEBUG(
-        "corrected_cmd_vel_callback",
-        std::to_string(current_cmd_vel_correction.linearVelocity) + " " +
-            std::to_string(current_cmd_vel_correction.angularVelocity));
+    // LOG_DEBUG(
+    //     "corrected_cmd_vel_callback",
+    //     std::to_string(current_cmd_vel_correction.linearVelocity) + " " +
+    //         std::to_string(current_cmd_vel_correction.angularVelocity));
 
-    LOG_DEBUG(
+    LOG_INFO(
         "PublishCmd_Vel",
         std::to_string(cmd_vel_.linearVelocity) + " " +
             std::to_string(cmd_vel_.angularVelocity));
 
-    std::cout << "Published cmd_vel: linearVelocity -> " << current_cmd_vel_.linearVelocity << " angularVelocity -> " << current_cmd_vel_.angularVelocity
-              << "Published Corrected cmd_vel: linearVelocity -> " << current_cmd_vel_correction.linearVelocity << " angularVelocity -> " << current_cmd_vel_correction.angularVelocity
+    // std::cout << "Published cmd_vel: linearVelocity -> " << current_cmd_vel_.linearVelocity << " angularVelocity -> " << current_cmd_vel_.angularVelocity
+    //           << "Published Corrected cmd_vel: linearVelocity -> " << current_cmd_vel_correction.linearVelocity << " angularVelocity -> " << current_cmd_vel_correction.angularVelocity
 
-              << std::endl;
+    //           << std::endl;
 }
 
 i2w::LifecycleResult i2wNode::OnTick() noexcept
@@ -385,4 +440,3 @@ float i2wNode::normalize(int16_t value, float max_output)
 
     return (static_cast<float>(value) / 32767.0f) * max_output;
 }
-

@@ -9,6 +9,7 @@
 #include "crawler_i2w_services/uirobotconnectioncheck.hpp"
 #include "crawler_i2w_services/rasterManualControl.hpp"
 #include "crawler_i2w_services/moveRobot.hpp"
+#include "crawler_i2w_services/controlModeSwitching.hpp"
 #include "logger.hpp"
 
 #include <chrono>
@@ -53,6 +54,11 @@ private:
 class i2wNode final : public i2w::SystemBase
 {
 public:
+    enum class ControlModeType : std::uint8_t
+    {
+        ManualJoy = crawler_i2w_services::ControlMode::kControlModeManualJoy,
+        AutoMission = crawler_i2w_services::ControlMode::kControlModeAutoMission,
+    };
     explicit i2wNode(i2w::Config config)
         : SystemBase(std::move(config))
     {
@@ -64,41 +70,54 @@ public:
         std::cout << "i2wNode Destroyed\n";
     }
 
-    // it should be onSetUp
     i2w::LifecycleResult OnSetup() noexcept;
-    // it should be onTick
     i2w::LifecycleResult OnTick() noexcept;
-    i2w::Publisher<crawler_i2w_msgs::cmd_vel> cmd_velPublisher_{};
 
+    // publisher
+
+    i2w::Publisher<crawler_i2w_msgs::cmd_vel> cmd_velPublisher_{};
     i2w::Publisher<crawler_i2w_msgs::cmd_vel_ui> cmd_vel_uiPublisher_;
+
+    // subscriber
+
     i2w::Subscription<crawler_i2w_msgs::JoyMsgs> sub_{};
     i2w::Subscription<crawler_i2w_msgs::cmd_vel> cmd_vel_correction_sub_{};
+    i2w::Subscription<crawler_i2w_msgs::cmd_vel> cmd_vel_mission_sub_{};
 
-    crawler_i2w_msgs::cmd_vel cmd_vel_;
-    crawler_i2w_msgs::cmd_vel current_cmd_vel_;
-    i2w::Client<crawler_i2w_services::UiRobotConnectionCheckRequest, crawler_i2w_services::UiRobotConnectionCheckReponse> uiRobotConnectionCheckclient_{};
-    void configerLogger();
-void publishCmd_Vel_Ui(float maxLinear, float maxAngular, float linear, float angular, bool setMaxValue);
 
-    float normalize(int16_t value, float max_output);
+    // service server
+    i2w::Server<crawler_i2w_services::MoveRobotRequest, crawler_i2w_services::MoveRobotResponse> move_robot_service_;
+    i2w::Server<crawler_i2w_services::ControlModeSwitchingRequest, crawler_i2w_services::ControlModeSwitchingResponse> control_mode_switching_service_;
 
-    bool waiting_for_response_{false};
-    bool is_ui_live_{false};
-    float speed_factor{1.0f}; // 1 second
-    std::chrono::steady_clock::time_point next_call_{};
-    std::chrono::steady_clock::time_point response_deadline_{};
-    void callUiRobotConnectionCheckService();
-
+    // service client
     i2w::Client<crawler_i2w_services::RasterLinearActuatorMoveRequest, crawler_i2w_services::RasterLinearActuatorMoveResponse> rasterLinearActuatorMoveClient_{};
     i2w::Client<crawler_i2w_services::RasterProbStopRequest, crawler_i2w_services::RasterProbStopResponse> rasterProbStopClient_{};
     i2w::Client<crawler_i2w_services::RasterProbMoveRequest, crawler_i2w_services::RasterProbMoveResponse> rasterProbMoveClient_{};
     i2w::Client<crawler_i2w_services::RasterProbHomeRequest, crawler_i2w_services::RasterProbHomeResponse> rasterProbHomeClient_{};
-    crawler_i2w_msgs::cmd_vel current_cmd_vel_correction{};
-
-    i2w::Server<crawler_i2w_services::MoveRobotRequest, crawler_i2w_services::MoveRobotResponse> move_robot_service_;
     i2w::Client<crawler_i2w_services::MoveRobotRequest, crawler_i2w_services::MoveRobotResponse> move_robot_client_;
+    i2w::Client<crawler_i2w_services::UiRobotConnectionCheckRequest, crawler_i2w_services::UiRobotConnectionCheckReponse> uiRobotConnectionCheckclient_{};
+
+    crawler_i2w_msgs::cmd_vel cmd_vel_;
+    crawler_i2w_msgs::cmd_vel current_cmd_vel_;
+    crawler_i2w_msgs::cmd_vel current_cmd_vel_correction{};
+    crawler_i2w_msgs::cmd_vel current_cmd_vel_misssion{};
+
+    bool waiting_for_response_{false};
+    bool is_ui_live_{false};
+    float speed_factor{1.0f}; // 1 second
+    ControlModeType current_mode = ControlModeType::ManualJoy;
+    
+    std::chrono::steady_clock::time_point next_call_{};
+    std::chrono::steady_clock::time_point response_deadline_{};
+
     void setUiLive(bool live);
     void publishCmd_Vel();
+    void callUiRobotConnectionCheckService();
+    void configerLogger();
+    void publishCmd_Vel_Ui(float maxLinear, float maxAngular, float linear, float angular, bool setMaxValue);
+    float normalize(int16_t value, float max_output);
+
+    // i2w service setup helper function
 
     template <typename RequestType, typename ResponseType, typename ClientType>
     void setupClient(
