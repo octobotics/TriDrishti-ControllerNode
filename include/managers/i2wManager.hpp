@@ -118,6 +118,7 @@ public:
     float normalize(int16_t value, float max_output);
 
     // i2w service setup helper function
+    bool isConnected();
 
     template <typename RequestType, typename ResponseType, typename ClientType>
     void setupClient(
