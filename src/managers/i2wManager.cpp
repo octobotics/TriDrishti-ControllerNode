@@ -336,12 +336,30 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
 
     cmd_vel_uiPublisher_ = std::move(cmd_vel_uiPublisher.value());
 
+    connection_monitor_running_.store(true);
+    connection_monitor_thread_ = std::thread([this]()
+    {
+        while (connection_monitor_running_.load())
+        {
+            // isConnected() may block for up to the ping timeout. Keep that
+            // work out of the i2w control/service dispatch thread.
+            setUiLive(isConnected());
+
+            for (int attempt = 0;
+                 attempt < 10 && connection_monitor_running_.load();
+                 ++attempt)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+        }
+    });
+
     return i2w::Ok();
 }
 
 bool i2wNode::isConnected()
 {
-    std::string host = "192.168.0.195";
+    std::string host = "192.168.0.211";
     std::string command = "setsid ping -c 1 -W 1 " + host + " > /dev/null 2>&1";
     int result = system(command.c_str());
     return (result == 0);
@@ -406,25 +424,18 @@ void i2wNode::callUiRobotConnectionCheckService()
     // waiting_for_response_ = true;
     // response_deadline_ = now + std::chrono::milliseconds(1000);
 
-    is_ui_live_ = isConnected();
-    if (is_ui_live_)
-    {
-        std::cout << "Connected" << std::endl;
-    }
-    else
-    {
-        std::cout << "Not Connected" << std::endl;
-    }
+    // isConnected() is executed by connection_monitor_thread_. Calling it
+    // here blocks OnTick() and prevents control-mode services from replying.
 }
 
 void i2wNode::setUiLive(bool live)
 {
-    if (live == is_ui_live_)
+    if (live == is_ui_live_.load())
     {
         return;
     }
 
-    is_ui_live_ = live;
+    is_ui_live_.store(live);
     // std::cout << "UI live: " << (is_ui_live_ ? "true" : "false") << std::endl;
 }
 

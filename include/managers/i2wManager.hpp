@@ -67,6 +67,11 @@ public:
 
     ~i2wNode()
     {
+       connection_monitor_running_.store(false);
+       if (connection_monitor_thread_.joinable())
+       {
+           connection_monitor_thread_.join();
+       }
        LOG_INFO("i2wNode","Disconstructor");
     }
 
@@ -104,7 +109,9 @@ public:
     crawler_i2w_msgs::cmd_vel current_cmd_vel_misssion{};
 
     bool waiting_for_response_{false};
-    bool is_ui_live_{false};
+    std::atomic<bool> is_ui_live_{false};
+    std::atomic<bool> connection_monitor_running_{false};
+    std::thread connection_monitor_thread_{};
     float speed_factor{1.0f}; // 1 second
     ControlModeType current_mode = ControlModeType::ManualJoy;
     
