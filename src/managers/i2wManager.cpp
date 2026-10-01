@@ -359,7 +359,7 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
 
 bool i2wNode::isConnected()
 {
-    std::string host = "192.168.0.211";
+    std::string host = "192.168.0.195";
     std::string command = "setsid ping -c 1 -W 1 " + host + " > /dev/null 2>&1";
     int result = system(command.c_str());
     return (result == 0);
