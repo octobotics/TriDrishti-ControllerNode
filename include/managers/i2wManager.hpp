@@ -6,10 +6,13 @@
 #include "i2w/impl.hpp"
 #include "crawler_i2w_msgs/ui/joy.hpp"
 #include "crawler_i2w_msgs/robot/cmd_vel.hpp"
+#include "crawler_i2w_msgs/robot/edge_status.hpp"
+
 #include "crawler_i2w_services/uirobotconnectioncheck.hpp"
 #include "crawler_i2w_services/rasterManualControl.hpp"
 #include "crawler_i2w_services/moveRobot.hpp"
 #include "crawler_i2w_services/controlModeSwitching.hpp"
+
 #include "logger.hpp"
 
 #include <chrono>
@@ -58,6 +61,7 @@ public:
     {
         ManualJoy = crawler_i2w_services::ControlMode::kControlModeManualJoy,
         AutoMission = crawler_i2w_services::ControlMode::kControlModeAutoMission,
+        WeldScan  = crawler_i2w_services::ControlMode::kControlModeWeldScan,
     };
     explicit i2wNode(i2w::Config config)
         : SystemBase(std::move(config))
@@ -88,6 +92,8 @@ public:
     i2w::Subscription<crawler_i2w_msgs::JoyMsgs> sub_{};
     i2w::Subscription<crawler_i2w_msgs::cmd_vel> cmd_vel_correction_sub_{};
     i2w::Subscription<crawler_i2w_msgs::cmd_vel> cmd_vel_mission_sub_{};
+    i2w::Subscription<crawler_i2w_msgs::edge_status> edge_status_sub_{};
+
 
 
     // service server
@@ -107,13 +113,14 @@ public:
     crawler_i2w_msgs::cmd_vel current_cmd_vel_;
     crawler_i2w_msgs::cmd_vel current_cmd_vel_correction{};
     crawler_i2w_msgs::cmd_vel current_cmd_vel_misssion{};
+    crawler_i2w_msgs::edge_status current_edge_status{};
 
     bool waiting_for_response_{false};
     std::atomic<bool> is_ui_live_{false};
     std::atomic<bool> connection_monitor_running_{false};
     std::thread connection_monitor_thread_{};
     float speed_factor{1.0f}; // 1 second
-    ControlModeType current_mode = ControlModeType::ManualJoy;
+    ControlModeType current_mode = ControlModeType::WeldScan;
     
     std::chrono::steady_clock::time_point next_call_{};
     std::chrono::steady_clock::time_point response_deadline_{};
@@ -124,6 +131,7 @@ public:
     void configerLogger();
     void publishCmd_Vel_Ui(float maxLinear, float maxAngular, float linear, float angular, bool setMaxValue);
     float normalize(int16_t value, float max_output);
+    crawler_i2w_msgs::cmd_vel calculateTheCmd_VelToFollowWeld();
 
     // i2w service setup helper function
     bool isConnected();
