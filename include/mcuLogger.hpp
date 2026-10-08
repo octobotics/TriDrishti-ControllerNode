@@ -8,8 +8,6 @@
 #include <string>
 #include "logger.hpp"
 
-namespace mcu
-{
 
 class MCULogger
 {
@@ -54,5 +52,3 @@ public:
     MCULogger()  = delete;
     ~MCULogger() = delete;
 };
-
-} // namespace mcu

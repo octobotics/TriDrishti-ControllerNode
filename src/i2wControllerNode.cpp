@@ -1,67 +1,20 @@
-#include "managers/i2wManager.hpp"
-#include <algorithm>
-#include <cmath>
+#include "i2wControllerNode.hpp"
+#include <iostream>
+#include "mcuLogger.hpp"
 
-i2wManager::i2wManager()
+I2wControllerNode::I2wControllerNode(i2w::Config config) : i2w::SystemBase(std::move(config))
 {
-    LOG_INFO("i2wManager", "Constructor");
+    LOG_INFO("I2wControllerNode", "I2wControllerNode created");
 }
 
-i2wManager::~i2wManager()
+I2wControllerNode::~I2wControllerNode()
 {
-    dispose();
-    LOG_INFO("i2wManager", "Disconstructor");
+    LOG_INFO("I2wControllerNode", "I2wControllerNode Distroyed");
 }
 
-void i2wManager::config()
+i2w::LifecycleResult I2wControllerNode::OnSetup() noexcept
 {
-    LOG_INFO("i2wManager", "Configuring MCU Node");
-
-    m_robotMcuConfig.node_name = "robotMcu";
-    m_robotMcuConfig.ns = "";
-    // m_robotMcuConfig.transport.network_profile_file =
-    //     "src/TriDrishti-ControllerNode/config/ecal-network-udp.yaml";
-}
-
-void i2wManager::init()
-{
-
-    LOG_INFO("i2wManager", "Initializing MCU Node");
-
-    m_robotMcuNode = std::make_unique<i2wNode>(m_robotMcuConfig);
-}
-
-void i2wManager::setup()
-{
-    if (!m_robotMcuNode)
-    {
-        std::cerr << "ERROR: Node not initialized.\n";
-        return;
-    }
-
-    m_robotMcuNode->Setup();
-}
-
-void i2wManager::tick()
-{
-    if (!m_robotMcuNode)
-        return;
-
-    m_robotMcuNode->Tick();
-}
-
-void i2wManager::dispose()
-{
-    if (m_robotMcuNode)
-    {
-        std::cout << "Disposing MCU Node\n";
-        m_robotMcuNode.reset();
-    }
-}
-
-i2w::LifecycleResult i2wNode::OnSetup() noexcept
-{
-    LOG_INFO("i2wNode", "OnSetup");
+    LOG_INFO("I2wControllerNode", "OnSetup");
 
     i2w::SubscriptionOptions opts;
     opts.plane = i2w::EndpointPlane::Local;
@@ -262,12 +215,12 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
         "/controller/control_mode_status",
         control_mode_status_service_,
         [this](
-            const crawler_i2w_services::ControlModeStatusRequest&,
-            const i2w::Header&,
-            crawler_i2w_services::ControlModeStatusResponse& response)
+            const crawler_i2w_services::ControlModeStatusRequest &,
+            const i2w::Header &,
+            crawler_i2w_services::ControlModeStatusResponse &response)
         {
             response = {};
-            response.success = 0U;  // Existing inverted convention: success.
+            response.success = 0U; // Existing inverted convention: success.
             response.active_mode = static_cast<std::uint8_t>(current_mode);
 
             std::snprintf(
@@ -362,13 +315,32 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
-        }
-    });
+        } });
 
     return i2w::Ok();
 }
 
-bool i2wNode::isConnected()
+i2w::LifecycleResult I2wControllerNode::OnTick() noexcept
+{
+    callUiRobotConnectionCheckService();
+    publishCmd_Vel();
+
+    if (!is_ui_live_)
+    {
+        cmd_vel_.linearVelocity = 0.0f;
+        cmd_vel_.angularVelocity = 0.0f;
+        cmd_vel_.timestamp = static_cast<std::uint64_t>(runtime().clock().now().ns);
+        (void)cmd_velPublisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
+        //      std::cout << "Published cmd_vel: linearVelocity -> " << cmd_vel_.linearVelocity << " angularVelocity -> " << cmd_vel_.angularVelocity << std::endl;
+
+        // std::cout << "UI is not live. Stopping the robot." << std::endl;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+    return i2w::Ok();
+}
+
+bool I2wControllerNode::isConnected()
 {
     std::string host = "192.168.0.195";
     std::string command = "setsid ping -c 1 -W 1 " + host + " > /dev/null 2>&1";
@@ -376,7 +348,7 @@ bool i2wNode::isConnected()
     return (result == 0);
 }
 
-void i2wNode::callUiRobotConnectionCheckService()
+void I2wControllerNode::callUiRobotConnectionCheckService()
 {
     // const auto now = std::chrono::steady_clock::now();
 
@@ -439,7 +411,7 @@ void i2wNode::callUiRobotConnectionCheckService()
     // here blocks OnTick() and prevents control-mode services from replying.
 }
 
-void i2wNode::setUiLive(bool live)
+void I2wControllerNode::setUiLive(bool live)
 {
     if (live == is_ui_live_.load())
     {
@@ -450,7 +422,7 @@ void i2wNode::setUiLive(bool live)
     // std::cout << "UI live: " << (is_ui_live_ ? "true" : "false") << std::endl;
 }
 
-void i2wNode::publishCmd_Vel_Ui(float maxLinear, float maxAngular, float linear, float angular, bool setMaxValue)
+void I2wControllerNode::publishCmd_Vel_Ui(float maxLinear, float maxAngular, float linear, float angular, bool setMaxValue)
 {
 
     crawler_i2w_msgs::cmd_vel_ui msgs;
@@ -469,13 +441,12 @@ void i2wNode::publishCmd_Vel_Ui(float maxLinear, float maxAngular, float linear,
     cmd_vel_uiPublisher_.publish(msgs, static_cast<std::int64_t>(msgs.timestamp));
 }
 
-crawler_i2w_msgs::cmd_vel i2wNode::calculateTheCmd_VelToFollowWeld()
+crawler_i2w_msgs::cmd_vel I2wControllerNode::calculateTheCmd_VelToFollowWeld()
 {
-    // ---- Tuning -----------------------------------------------------------
     constexpr float kForwardSpeed = 2.0f; // m/s along the weld
-    constexpr float kKp = 20.0f;           // rad/s per metre of error (5 mm -> 0.1 rad/s)
-    constexpr float kMaxTurn = 10.0f;       // rad/s, turn-rate limit
-    constexpr float kDeadband = 0.05f;   // 0.5 mm: inside this, drive straight
+    constexpr float kKp = 20.0f;          // rad/s per metre of error (5 mm -> 0.1 rad/s)
+    constexpr float kMaxTurn = 10.0f;     // rad/s, turn-rate limit
+    constexpr float kDeadband = 0.05f;    // 0.5 mm: inside this, drive straight
 
     crawler_i2w_msgs::cmd_vel cmd_vel_to_follow_weld{};
 
@@ -486,97 +457,59 @@ crawler_i2w_msgs::cmd_vel i2wNode::calculateTheCmd_VelToFollowWeld()
     // Error = weld centre relative to sensor centre (metres)
     //   error < 0 -> weld is LEFT  of centre
     //   error > 0 -> weld is RIGHT of centre
-    const float error = 10*(current_edge_status.left_x + current_edge_status.right_x) / 2.0f;
+    const float error = 10 * (current_edge_status.left_x + current_edge_status.right_x) / 2.0f;
 
     float turn = 0.0f;
     // if (std::fabs(error) > kDeadband)
     // {
-        // Positive angular_z = turn left (counter-clockwise),
-        // negative angular_z = turn right.
-        //   error < 0 -> -kKp * error > 0 -> turn LEFT
-        //   error > 0 -> -kKp * error < 0 -> turn RIGHT
-        turn = -kKp * error;
+    // Positive angular_z = turn left (counter-clockwise),
+    // negative angular_z = turn right.
+    //   error < 0 -> -kKp * error > 0 -> turn LEFT
+    //   error > 0 -> -kKp * error < 0 -> turn RIGHT
+    turn = -kKp * error;
 
-        if (turn > kMaxTurn)
-            turn = kMaxTurn; // too far left -> limit
-        else if (turn < -kMaxTurn)
-            turn = -kMaxTurn; // too far right -> limit    }
+    if (turn > kMaxTurn)
+        turn = kMaxTurn; // too far left -> limit
+    else if (turn < -kMaxTurn)
+        turn = -kMaxTurn; // too far right -> limit    }
 
-        cmd_vel_to_follow_weld.linearVelocity = 0.0f; // forward speed along the weld
-        cmd_vel_to_follow_weld.angularVelocity = turn*2;
+    cmd_vel_to_follow_weld.linearVelocity = 2.0f; // forward speed along the weld
+    cmd_vel_to_follow_weld.angularVelocity = turn * 2;
 
-        return cmd_vel_to_follow_weld;
+    return cmd_vel_to_follow_weld;
     // }
 }
 
-    void i2wNode::publishCmd_Vel()
+void I2wControllerNode::publishCmd_Vel()
+{
+    // cmd val correction value merge
+
+    if (current_mode == I2wControllerNode::ControlModeType::ManualJoy)
     {
-        // cmd val correction value merge
-
-        if (current_mode == i2wNode::ControlModeType::ManualJoy)
-        {
-            cmd_vel_.linearVelocity = current_cmd_vel_correction.linearVelocity + current_cmd_vel_.linearVelocity;
-            cmd_vel_.angularVelocity = current_cmd_vel_correction.angularVelocity + current_cmd_vel_.angularVelocity;
-        }
-
-        if (current_mode == i2wNode::ControlModeType::AutoMission)
-        {
-            cmd_vel_.linearVelocity = current_cmd_vel_correction.linearVelocity + current_cmd_vel_misssion.linearVelocity;
-            cmd_vel_.angularVelocity = current_cmd_vel_correction.angularVelocity + current_cmd_vel_misssion.angularVelocity;
-        }
-
-        if (current_mode == i2wNode::ControlModeType::WeldScan)
-        {
-
-            cmd_vel_ = calculateTheCmd_VelToFollowWeld();
-        }
-
-        (void)cmd_velPublisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
-
-        publishCmd_Vel_Ui(0, 0, cmd_vel_.linearVelocity, cmd_vel_.angularVelocity, 0);
-
-        // LOG_DEBUG(
-        //     "joy_callback",
-        //     std::to_string(current_cmd_vel_.linearVelocity) + " " +
-        //         std::to_string(current_cmd_vel_.angularVelocity));
-
-        // LOG_DEBUG(
-        //     "corrected_cmd_vel_callback",
-        //     std::to_string(current_cmd_vel_correction.linearVelocity) + " " +
-        //         std::to_string(current_cmd_vel_correction.angularVelocity));
-
-        // LOG_INFO(
-        //     "PublishCmd_Vel",
-        //     std::to_string(cmd_vel_.linearVelocity) + " " +
-        //         std::to_string(cmd_vel_.angularVelocity));
-
-        // std::cout << "Published cmd_vel: linearVelocity -> " << current_cmd_vel_.linearVelocity << " angularVelocity -> " << current_cmd_vel_.angularVelocity
-        //           << "Published Corrected cmd_vel: linearVelocity -> " << current_cmd_vel_correction.linearVelocity << " angularVelocity -> " << current_cmd_vel_correction.angularVelocity
-        std::cout << "Published cmd_vel: linearVelocity -> " << cmd_vel_.linearVelocity << " angularVelocity -> " << cmd_vel_.angularVelocity
-                  << std::endl;
+        cmd_vel_.linearVelocity = current_cmd_vel_correction.linearVelocity + current_cmd_vel_.linearVelocity;
+        cmd_vel_.angularVelocity = current_cmd_vel_correction.angularVelocity + current_cmd_vel_.angularVelocity;
     }
 
-    i2w::LifecycleResult i2wNode::OnTick() noexcept
+    if (current_mode == I2wControllerNode::ControlModeType::AutoMission)
     {
-        callUiRobotConnectionCheckService();
-        publishCmd_Vel();
-
-        if (!is_ui_live_)
-        {
-            cmd_vel_.linearVelocity = 0.0f;
-            cmd_vel_.angularVelocity = 0.0f;
-            cmd_vel_.timestamp = static_cast<std::uint64_t>(runtime().clock().now().ns);
-            (void)cmd_velPublisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
-            //      std::cout << "Published cmd_vel: linearVelocity -> " << cmd_vel_.linearVelocity << " angularVelocity -> " << cmd_vel_.angularVelocity << std::endl;
-
-            // std::cout << "UI is not live. Stopping the robot." << std::endl;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        return i2w::Ok();
+        cmd_vel_.linearVelocity = current_cmd_vel_correction.linearVelocity + current_cmd_vel_misssion.linearVelocity;
+        cmd_vel_.angularVelocity = current_cmd_vel_correction.angularVelocity + current_cmd_vel_misssion.angularVelocity;
     }
 
-    float i2wNode::normalize(int16_t value, float max_output)
+    if (current_mode == I2wControllerNode::ControlModeType::WeldScan)
     {
 
-        return (static_cast<float>(value) / 32767.0f) * max_output;
+        cmd_vel_ = calculateTheCmd_VelToFollowWeld();
     }
+
+    (void)cmd_velPublisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
+
+    publishCmd_Vel_Ui(0, 0, cmd_vel_.linearVelocity, cmd_vel_.angularVelocity, 0);
+    // LOG_INFO("PublishCmd_Vel", std::to_string(cmd_vel_.linearVelocity) + " " + std::to_string(cmd_vel_.angularVelocity));
+}
+
+float I2wControllerNode::normalize(int16_t value, float max_output)
+{
+
+    return (static_cast<float>(value) / 32767.0f) * max_output;
+}

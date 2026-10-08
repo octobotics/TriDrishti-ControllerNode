@@ -5,12 +5,10 @@
 #include <thread>
 #include <iostream>
 #include <i2w/impl.hpp>
-// #include <logger.hpp>
-// #include <behaviortree_cpp/action_node.h>
-// #include <behaviortree_cpp_v3/action_node.h>
-#include "mcuLogger.hpp"
 
-#include "robot/robot.hpp"
+#include "mcuLogger.hpp"
+#include "i2wControllerNode.hpp"
+
 
 namespace
 {
@@ -26,7 +24,7 @@ int main()
 {
     std::signal(SIGINT, signalHandler);
 
-    mcu::MCULogger::init("mcu");
+    MCULogger::init("mcu");
 
     auto networkProfileFilePath = std::string(CONFIG_DIR) + "/ecal-network-udp.yaml";
 
@@ -34,18 +32,25 @@ int main()
 
     LOG_INFO("main", "Starting Robot...");
 
-    Robot::Robot &robot = Robot::Robot::instance();
-    robot.start();
-    // namespace
+    i2w::Config i2w_mcu_config;
+    i2w_mcu_config.node_name = "controller_node";
+    i2w_mcu_config.ns = "";
+
+    I2wControllerNode i2wControllerNode(i2w_mcu_config);
+    
+
+    i2wControllerNode.Setup();
+
     while (!shutdownRequested.load(std::memory_order_relaxed))
     {
-        robot.tick();
+        i2wControllerNode.Tick();
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
 
-    LOG_INFO("main", "Stopping Robot...");
 
-    robot.stop();
+    i2wControllerNode.Dispose();
+
+        LOG_INFO("main", "Stopping Robot...");
 
     return 0;
 }

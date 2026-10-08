@@ -1,20 +1,5 @@
-#pragma once
-
 #include <iostream>
 #include <memory>
-
-#include "i2w/impl.hpp"
-#include "crawler_i2w_msgs/ui/joy.hpp"
-#include "crawler_i2w_msgs/robot/cmd_vel.hpp"
-#include "crawler_i2w_msgs/robot/edge_status.hpp"
-
-#include "crawler_i2w_services/uirobotconnectioncheck.hpp"
-#include "crawler_i2w_services/rasterManualControl.hpp"
-#include "crawler_i2w_services/moveRobot.hpp"
-#include "crawler_i2w_services/controlModeSwitching.hpp"
-
-#include "logger.hpp"
-
 #include <chrono>
 #include <cstdio>
 #include <ctime>
@@ -33,29 +18,26 @@
 #include <string>
 #include <csignal>
 
+#include <i2w/impl.hpp>
+#include "crawler_i2w_msgs/ui/joy.hpp"
+#include "crawler_i2w_msgs/robot/cmd_vel.hpp"
+#include "crawler_i2w_msgs/robot/edge_status.hpp"
+
+#include "crawler_i2w_services/uirobotconnectioncheck.hpp"
+#include "crawler_i2w_services/rasterManualControl.hpp"
+#include "crawler_i2w_services/moveRobot.hpp"
+#include "crawler_i2w_services/controlModeSwitching.hpp"
+
+#include "mcuLogger.hpp"
 #include "mcuSetting.hpp"
+#include "core/controller.hpp"
 
-class i2wNode;
 
-class i2wManager
+class I2wControllerNode final : public i2w::SystemBase, public Controller
+
 {
-public:
-    i2wManager();
-    ~i2wManager();
-
-    void config();
-    void init();
-    void setup();
-    void tick();
-    void dispose();
-
 private:
-    i2w::Config m_robotMcuConfig;
-    std::unique_ptr<i2wNode> m_robotMcuNode;
-};
-
-class i2wNode final : public i2w::SystemBase
-{
+    /* data */
 public:
     enum class ControlModeType : std::uint8_t
     {
@@ -63,38 +45,21 @@ public:
         AutoMission = crawler_i2w_services::ControlMode::kControlModeAutoMission,
         WeldScan  = crawler_i2w_services::ControlMode::kControlModeWeldScan,
     };
-    explicit i2wNode(i2w::Config config)
-        : SystemBase(std::move(config))
-    {
-       LOG_INFO("i2wNode","Constructor");
-    }
 
-    ~i2wNode()
-    {
-       connection_monitor_running_.store(false);
-       if (connection_monitor_thread_.joinable())
-       {
-           connection_monitor_thread_.join();
-       }
-       LOG_INFO("i2wNode","Disconstructor");
-    }
-
+    I2wControllerNode(i2w::Config config);
+    ~I2wControllerNode();
     i2w::LifecycleResult OnSetup() noexcept;
     i2w::LifecycleResult OnTick() noexcept;
 
     // publisher
-
     i2w::Publisher<crawler_i2w_msgs::cmd_vel> cmd_velPublisher_{};
     i2w::Publisher<crawler_i2w_msgs::cmd_vel_ui> cmd_vel_uiPublisher_;
 
     // subscriber
-
     i2w::Subscription<crawler_i2w_msgs::JoyMsgs> sub_{};
     i2w::Subscription<crawler_i2w_msgs::cmd_vel> cmd_vel_correction_sub_{};
     i2w::Subscription<crawler_i2w_msgs::cmd_vel> cmd_vel_mission_sub_{};
     i2w::Subscription<crawler_i2w_msgs::edge_status> edge_status_sub_{};
-
-
 
     // service server
     i2w::Server<crawler_i2w_services::MoveRobotRequest, crawler_i2w_services::MoveRobotResponse> move_robot_service_;
@@ -194,4 +159,8 @@ public:
         serviceMember = std::move(service.value());
         return true;
     }
+
+
+
 };
+

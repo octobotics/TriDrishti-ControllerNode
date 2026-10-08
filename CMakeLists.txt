@@ -47,8 +47,8 @@ message(STATUS "========================================")
 add_executable(robot_mcu_node
   src/main.cpp
 
-  src/robot/robot.cpp
-  src/managers/i2wManager.cpp
+  src/core/controller.cpp
+  src/i2wControllerNode.cpp
 )
 target_compile_features(robot_mcu_node PRIVATE cxx_std_20)
 
