@@ -22,6 +22,7 @@
 #include "crawler_i2w_msgs/ui/joy.hpp"
 #include "crawler_i2w_msgs/robot/cmd_vel.hpp"
 #include "crawler_i2w_msgs/robot/edge_status.hpp"
+#include "crawler_i2w_msgs/scan_control.hpp"
 
 #include "crawler_i2w_services/uirobotconnectioncheck.hpp"
 #include "crawler_i2w_services/rasterManualControl.hpp"
@@ -31,7 +32,6 @@
 #include "mcuLogger.hpp"
 #include "mcuSetting.hpp"
 #include "core/controller.hpp"
-
 
 class I2wControllerNode final : public i2w::SystemBase, public Controller
 
@@ -43,7 +43,7 @@ public:
     {
         ManualJoy = crawler_i2w_services::ControlMode::kControlModeManualJoy,
         AutoMission = crawler_i2w_services::ControlMode::kControlModeAutoMission,
-        WeldScan  = crawler_i2w_services::ControlMode::kControlModeWeldScan,
+        WeldScan = crawler_i2w_services::ControlMode::kControlModeWeldScan,
     };
 
     I2wControllerNode(i2w::Config config);
@@ -54,17 +54,19 @@ public:
     // publisher
     i2w::Publisher<crawler_i2w_msgs::cmd_vel> cmd_velPublisher_{};
     i2w::Publisher<crawler_i2w_msgs::cmd_vel_ui> cmd_vel_uiPublisher_;
+    i2w::Publisher<crawler_i2w_msgs::edge_status> edge_statusPublisher_{};
 
     // subscriber
     i2w::Subscription<crawler_i2w_msgs::JoyMsgs> sub_{};
     i2w::Subscription<crawler_i2w_msgs::cmd_vel> cmd_vel_correction_sub_{};
     i2w::Subscription<crawler_i2w_msgs::cmd_vel> cmd_vel_mission_sub_{};
     i2w::Subscription<crawler_i2w_msgs::edge_status> edge_status_sub_{};
+    i2w::Subscription<crawler_i2w_msgs::I2wScanControlProfile> laser_profile_sub_{};
 
     // service server
     i2w::Server<crawler_i2w_services::MoveRobotRequest, crawler_i2w_services::MoveRobotResponse> move_robot_service_;
     i2w::Server<crawler_i2w_services::ControlModeSwitchingRequest, crawler_i2w_services::ControlModeSwitchingResponse> control_mode_switching_service_;
-    i2w::Server<crawler_i2w_services::ControlModeStatusRequest,crawler_i2w_services::ControlModeStatusResponse> control_mode_status_service_;
+    i2w::Server<crawler_i2w_services::ControlModeStatusRequest, crawler_i2w_services::ControlModeStatusResponse> control_mode_status_service_;
 
     // service client
     i2w::Client<crawler_i2w_services::RasterLinearActuatorMoveRequest, crawler_i2w_services::RasterLinearActuatorMoveResponse> rasterLinearActuatorMoveClient_{};
@@ -79,6 +81,7 @@ public:
     crawler_i2w_msgs::cmd_vel current_cmd_vel_correction{};
     crawler_i2w_msgs::cmd_vel current_cmd_vel_misssion{};
     crawler_i2w_msgs::edge_status current_edge_status{};
+    crawler_i2w_msgs::I2wScanControlProfile current_laser_profile{};
 
     bool waiting_for_response_{false};
     std::atomic<bool> is_ui_live_{false};
@@ -86,17 +89,27 @@ public:
     std::thread connection_monitor_thread_{};
     float speed_factor{1.0f}; // 1 second
     ControlModeType current_mode = ControlModeType::WeldScan;
-    
+    float kEdgeThreshold = 0.0005f; // 0.5 mm away from base level counts as "high"
+    int kEdgeMinRun = 3;            // need >= 3 high points in a row (ignores noise)
+    float activeLength = 0.025f;
+
     std::chrono::steady_clock::time_point next_call_{};
     std::chrono::steady_clock::time_point response_deadline_{};
 
+    void setupSubscriber();
+    void setupPublisher();
     void setUiLive(bool live);
-    void publishCmd_Vel();
+    void publishCmd_Vel(crawler_i2w_msgs::cmd_vel &cmd_vel_);
     void callUiRobotConnectionCheckService();
     void configerLogger();
     void publishCmd_Vel_Ui(float maxLinear, float maxAngular, float linear, float angular, bool setMaxValue);
     float normalize(int16_t value, float max_output);
-    crawler_i2w_msgs::cmd_vel calculateTheCmd_VelToFollowWeld();
+    
+    crawler_i2w_msgs::cmd_vel calculateTheCmd_VelToFollowWeld(crawler_i2w_msgs::edge_status current_edge_status);
+
+    crawler_i2w_msgs::edge_status detectEdge(const std::array<crawler_i2w_msgs::ScanControlPoint, crawler_i2w_msgs::kI2wScanControlMaxPoints> &pts);
+    void publisher_edge_status(const crawler_i2w_msgs::edge_status &current_edge_status);
+    void move_robot();
 
     // i2w service setup helper function
     bool isConnected();
@@ -159,8 +172,4 @@ public:
         serviceMember = std::move(service.value());
         return true;
     }
-
-
-
 };
-

@@ -16,11 +16,49 @@ i2w::LifecycleResult I2wControllerNode::OnSetup() noexcept
 {
     LOG_INFO("I2wControllerNode", "OnSetup");
 
-    i2w::SubscriptionOptions opts;
-    opts.plane = i2w::EndpointPlane::Local;
-    opts.reliability = i2w::Reliability::BestEffort;
-    opts.queue_depth = 32;
-    opts.overflow_policy = i2w::OverflowPolicy::DropOldest;
+    setupSubscriber();
+
+    setupPublisher();
+
+    return i2w::Ok();
+}
+
+i2w::LifecycleResult I2wControllerNode::OnTick() noexcept
+{
+    callUiRobotConnectionCheckService();
+
+    move_robot();
+
+    if (!is_ui_live_)
+    {
+        cmd_vel_.linearVelocity = 0.0f;
+        cmd_vel_.angularVelocity = 0.0f;
+        cmd_vel_.timestamp = static_cast<std::uint64_t>(runtime().clock().now().ns);
+        (void)cmd_velPublisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
+        //      std::cout << "Published cmd_vel: linearVelocity -> " << cmd_vel_.linearVelocity << " angularVelocity -> " << cmd_vel_.angularVelocity << std::endl;
+
+        // std::cout << "UI is not live. Stopping the robot." << std::endl;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+    return i2w::Ok();
+}
+
+void I2wControllerNode::move_robot(){
+    current_edge_status = detectEdge(current_laser_profile.points);
+    cmd_vel_ = calculateTheCmd_VelToFollowWeld(current_edge_status);
+    publishCmd_Vel(cmd_vel_);
+    publisher_edge_status(current_edge_status);
+}
+
+
+void I2wControllerNode::setupSubscriber()
+{
+    i2w::SubscriptionOptions sub_options;
+    sub_options.plane = i2w::EndpointPlane::Local;
+    sub_options.reliability = i2w::Reliability::BestEffort;
+    sub_options.queue_depth = 32;
+    sub_options.overflow_policy = i2w::OverflowPolicy::DropOldest;
 
     auto subscription = runtime().subscribe<crawler_i2w_msgs::JoyMsgs>(
         "/joy",
@@ -98,14 +136,8 @@ i2w::LifecycleResult I2wControllerNode::OnSetup() noexcept
                 // std::cout << "Published cmd_vel: linearVelocity -> " << cmd_vel_.linearVelocity << " angularVelocity -> " << cmd_vel_.angularVelocity << std::endl;
             }
         },
-        opts);
+        sub_options);
     sub_ = std::move(subscription.value());
-
-    i2w::SubscriptionOptions optsCmdVelCorrection;
-    optsCmdVelCorrection.plane = i2w::EndpointPlane::Local;
-    optsCmdVelCorrection.reliability = i2w::Reliability::BestEffort;
-    optsCmdVelCorrection.queue_depth = 32;
-    optsCmdVelCorrection.overflow_policy = i2w::OverflowPolicy::DropOldest;
 
     auto cmd_vel_correction_sub = runtime().subscribe<crawler_i2w_msgs::cmd_vel>(
         "/cmd_vel_correction",
@@ -113,7 +145,7 @@ i2w::LifecycleResult I2wControllerNode::OnSetup() noexcept
         {
             current_cmd_vel_correction = sample.value;
         },
-        optsCmdVelCorrection);
+        sub_options);
     cmd_vel_correction_sub_ = std::move(cmd_vel_correction_sub.value());
 
     // sub edge status
@@ -124,7 +156,7 @@ i2w::LifecycleResult I2wControllerNode::OnSetup() noexcept
         {
             current_edge_status = sample.value;
         },
-        optsCmdVelCorrection);
+        sub_options);
     edge_status_sub_ = std::move(edge_status_sub.value());
 
     // mission cmd_vel
@@ -135,164 +167,23 @@ i2w::LifecycleResult I2wControllerNode::OnSetup() noexcept
         {
             current_cmd_vel_misssion = sample.value;
         },
-        optsCmdVelCorrection);
+        sub_options);
     cmd_vel_mission_sub_ = std::move(cmd_vel_mission_sub.value());
 
-    i2w::PublisherOptions cmdVelPubOpt;
-    cmdVelPubOpt.plane = i2w::EndpointPlane::Local;
-
-    auto cmd_velPublisher = runtime().advertise<crawler_i2w_msgs::cmd_vel>("/cmd_vel", cmdVelPubOpt);
-
-    cmd_velPublisher_ = std::move(cmd_velPublisher.value());
-
-    bool ok = advertiseService<crawler_i2w_services::MoveRobotRequest,
-                               crawler_i2w_services::MoveRobotResponse>(
-        "/move_robot_service",
-        move_robot_service_,
-        [this](const crawler_i2w_services::MoveRobotRequest &request, const i2w::Header &header,
-               crawler_i2w_services::MoveRobotResponse &response)
+    // laser profile sub
+    auto laser_profile_sub = runtime().subscribe<crawler_i2w_msgs::I2wScanControlProfile>(
+        "profile",
+        [this](const i2w::Sample<crawler_i2w_msgs::I2wScanControlProfile> &sample)
         {
-            if (is_ui_live_)
-            {
-                move_robot_client_.call({request.distance, request.speed}, static_cast<std::int64_t>(runtime().clock().now().ns), [](const i2w::Sample<crawler_i2w_services::MoveRobotResponse> &response)
-                                        { std::cout << "Raster Prob Move Right Service Response: " << (response.value.result ? "Success" : "Failure") << std::endl; });
-                response.result = true;
-            }
-            else
-            {
-                std::cout << "Ui is not avaliable, Connent to Ui First" << std::endl;
-            }
-        });
-    if (!ok)
-        return i2w::Fail();
+            current_laser_profile = sample.value;
 
-    ok = advertiseService<crawler_i2w_services::ControlModeSwitchingRequest,
-                          crawler_i2w_services::ControlModeSwitchingResponse>(
-        "/controller/control_mode",
-        control_mode_switching_service_,
-        [this](const crawler_i2w_services::ControlModeSwitchingRequest &request, const i2w::Header &header,
-               crawler_i2w_services::ControlModeSwitchingResponse &response)
-        {
-            LOG_INFO("ControlModeSwitching Service", "Control Mode Switching Request");
-            response = {};
-            response.success = 1;
-            response.active_mode = static_cast<std::uint8_t>(current_mode);
+        },
+        sub_options);
+    laser_profile_sub_ = std::move(laser_profile_sub.value());
+}
 
-            if (request.requested_mode == crawler_i2w_services::ControlMode::kControlModeManualJoy && current_mode != ControlModeType::ManualJoy)
-            {
-                current_mode = ControlModeType::ManualJoy;
-                response.active_mode = crawler_i2w_services::ControlMode::kControlModeManualJoy;
-                response.success = 0;
-
-                LOG_INFO("ControlModeSwitching Service", "Set Control Mode to Manual Joy");
-            }
-            else if (request.requested_mode == crawler_i2w_services::ControlMode::kControlModeAutoMission && current_mode != ControlModeType::AutoMission)
-            {
-                current_mode = ControlModeType::AutoMission;
-                response.active_mode = crawler_i2w_services::ControlMode::kControlModeAutoMission;
-                response.success = 0;
-
-                LOG_INFO("ControlModeSwitching Service", "Set Control Mode to Auto Mission");
-            }
-            else
-            {
-                // Keep current_mode and active_mode unchanged.
-                response.success = 1U;
-
-                LOG_ERROR("ControlModeSwitching Service", "Invalid requested control mode");
-            }
-
-            response.timestamp_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                        std::chrono::system_clock::now().time_since_epoch())
-                                        .count();
-        });
-    if (!ok)
-        return i2w::Fail();
-
-    ok = advertiseService<
-        crawler_i2w_services::ControlModeStatusRequest,
-        crawler_i2w_services::ControlModeStatusResponse>(
-        "/controller/control_mode_status",
-        control_mode_status_service_,
-        [this](
-            const crawler_i2w_services::ControlModeStatusRequest &,
-            const i2w::Header &,
-            crawler_i2w_services::ControlModeStatusResponse &response)
-        {
-            response = {};
-            response.success = 0U; // Existing inverted convention: success.
-            response.active_mode = static_cast<std::uint8_t>(current_mode);
-
-            std::snprintf(
-                response.message.data(), response.message.size(),
-                "control mode query successful");
-
-            response.timestamp_ns =
-                std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    std::chrono::system_clock::now().time_since_epoch())
-                    .count();
-        });
-
-    if (!ok)
-        return i2w::Fail();
-
-    setupClient<crawler_i2w_services::MoveRobotRequest, crawler_i2w_services::MoveRobotResponse>(
-        runtime(),
-        "/mcu/move_robot_service",
-        move_robot_client_,
-        []
-        {
-            std::cerr << "Failed to create client for /ui_robot_connection_check service\n";
-        });
-
-    // Setup a client for the service
-    setupClient<crawler_i2w_services::UiRobotConnectionCheckRequest, crawler_i2w_services::UiRobotConnectionCheckReponse>(
-        runtime(),
-        "/ui_robot_connection_check",
-        uiRobotConnectionCheckclient_,
-        []
-        {
-            std::cerr << "Failed to create client for /ui_robot_connection_check service\n";
-        });
-
-    // Raster Service Client Setup
-
-    setupClient<crawler_i2w_services::RasterProbHomeRequest, crawler_i2w_services::RasterProbHomeResponse>(
-        runtime(),
-        "/raster_prob_home_service",
-        rasterProbHomeClient_,
-        []
-        {
-            std::cerr << "Failed to create client for /raster_prob_home_service service\n";
-        });
-
-    setupClient<crawler_i2w_services::RasterProbMoveRequest, crawler_i2w_services::RasterProbMoveResponse>(
-        runtime(),
-        "/raster_prob_move_service",
-        rasterProbMoveClient_,
-        []
-        {
-            std::cerr << "Failed to create client for /raster_prob_move_service service\n";
-        });
-
-    setupClient<crawler_i2w_services::RasterProbStopRequest, crawler_i2w_services::RasterProbStopResponse>(
-        runtime(),
-        "/raster_prob_stop_service",
-        rasterProbStopClient_,
-        []
-        {
-            std::cerr << "Failed to create client for /raster_prob_stop_service service\n";
-        });
-
-    setupClient<crawler_i2w_services::RasterLinearActuatorMoveRequest, crawler_i2w_services::RasterLinearActuatorMoveResponse>(
-        runtime(),
-        "/raster_linearActuator_move_service",
-        rasterLinearActuatorMoveClient_,
-        []
-        {
-            std::cerr << "Failed to create client for /raster_linearActuator_move_service service\n";
-        });
-
+void I2wControllerNode::setupPublisher()
+{
     i2w::PublisherOptions cmdVelUiPubOpt;
     cmdVelUiPubOpt.plane = i2w::EndpointPlane::Local;
 
@@ -316,30 +207,7 @@ i2w::LifecycleResult I2wControllerNode::OnSetup() noexcept
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
         } });
-
-    return i2w::Ok();
 }
-
-i2w::LifecycleResult I2wControllerNode::OnTick() noexcept
-{
-    callUiRobotConnectionCheckService();
-    publishCmd_Vel();
-
-    if (!is_ui_live_)
-    {
-        cmd_vel_.linearVelocity = 0.0f;
-        cmd_vel_.angularVelocity = 0.0f;
-        cmd_vel_.timestamp = static_cast<std::uint64_t>(runtime().clock().now().ns);
-        (void)cmd_velPublisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
-        //      std::cout << "Published cmd_vel: linearVelocity -> " << cmd_vel_.linearVelocity << " angularVelocity -> " << cmd_vel_.angularVelocity << std::endl;
-
-        // std::cout << "UI is not live. Stopping the robot." << std::endl;
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
-    return i2w::Ok();
-}
-
 bool I2wControllerNode::isConnected()
 {
     std::string host = "192.168.0.195";
@@ -441,7 +309,7 @@ void I2wControllerNode::publishCmd_Vel_Ui(float maxLinear, float maxAngular, flo
     cmd_vel_uiPublisher_.publish(msgs, static_cast<std::int64_t>(msgs.timestamp));
 }
 
-crawler_i2w_msgs::cmd_vel I2wControllerNode::calculateTheCmd_VelToFollowWeld()
+crawler_i2w_msgs::cmd_vel I2wControllerNode::calculateTheCmd_VelToFollowWeld(crawler_i2w_msgs::edge_status current_edge_status)
 {
     constexpr float kForwardSpeed = 2.0f; // m/s along the weld
     constexpr float kKp = 20.0f;          // rad/s per metre of error (5 mm -> 0.1 rad/s)
@@ -476,40 +344,128 @@ crawler_i2w_msgs::cmd_vel I2wControllerNode::calculateTheCmd_VelToFollowWeld()
     cmd_vel_to_follow_weld.linearVelocity = 2.0f; // forward speed along the weld
     cmd_vel_to_follow_weld.angularVelocity = turn * 2;
 
+    // std::cout << "Weld follow: error = " << error << " turn = " << turn << std::endl;
+
     return cmd_vel_to_follow_weld;
     // }
 }
 
-void I2wControllerNode::publishCmd_Vel()
+void I2wControllerNode::publishCmd_Vel(crawler_i2w_msgs::cmd_vel &cmd_vel_)
 {
     // cmd val correction value merge
 
-    if (current_mode == I2wControllerNode::ControlModeType::ManualJoy)
-    {
-        cmd_vel_.linearVelocity = current_cmd_vel_correction.linearVelocity + current_cmd_vel_.linearVelocity;
-        cmd_vel_.angularVelocity = current_cmd_vel_correction.angularVelocity + current_cmd_vel_.angularVelocity;
-    }
+    // if (current_mode == I2wControllerNode::ControlModeType::ManualJoy)
+    // {
+    //     cmd_vel_.linearVelocity = current_cmd_vel_correction.linearVelocity + current_cmd_vel_.linearVelocity;
+    //     cmd_vel_.angularVelocity = current_cmd_vel_correction.angularVelocity + current_cmd_vel_.angularVelocity;
+    // }
 
-    if (current_mode == I2wControllerNode::ControlModeType::AutoMission)
-    {
-        cmd_vel_.linearVelocity = current_cmd_vel_correction.linearVelocity + current_cmd_vel_misssion.linearVelocity;
-        cmd_vel_.angularVelocity = current_cmd_vel_correction.angularVelocity + current_cmd_vel_misssion.angularVelocity;
-    }
+    // if (current_mode == I2wControllerNode::ControlModeType::AutoMission)
+    // {
+    //     cmd_vel_.linearVelocity = current_cmd_vel_correction.linearVelocity + current_cmd_vel_misssion.linearVelocity;
+    //     cmd_vel_.angularVelocity = current_cmd_vel_correction.angularVelocity + current_cmd_vel_misssion.angularVelocity;
+    // }
 
-    if (current_mode == I2wControllerNode::ControlModeType::WeldScan)
-    {
+    // if (current_mode == I2wControllerNode::ControlModeType::WeldScan)
+    // {
 
-        cmd_vel_ = calculateTheCmd_VelToFollowWeld();
-    }
+        // publisher_edge_status(current_laser_profile);
+       
+    // }
 
     (void)cmd_velPublisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
 
     publishCmd_Vel_Ui(0, 0, cmd_vel_.linearVelocity, cmd_vel_.angularVelocity, 0);
-    // LOG_INFO("PublishCmd_Vel", std::to_string(cmd_vel_.linearVelocity) + " " + std::to_string(cmd_vel_.angularVelocity));
+    LOG_INFO("PublishCmd_Vel", std::to_string(cmd_vel_.linearVelocity) + " " + std::to_string(cmd_vel_.angularVelocity));
 }
 
 float I2wControllerNode::normalize(int16_t value, float max_output)
 {
 
     return (static_cast<float>(value) / 32767.0f) * max_output;
+}
+
+crawler_i2w_msgs::edge_status I2wControllerNode::detectEdge(const std::array<crawler_i2w_msgs::ScanControlPoint, crawler_i2w_msgs::kI2wScanControlMaxPoints> &pts)
+{
+    crawler_i2w_msgs::edge_status e;
+
+
+    // Base level = median Z of all valid points
+    std::vector<float> zs;
+
+    zs.reserve(pts.size());
+    for (const auto &p : pts)
+        if (p.valid)
+            zs.push_back(p.z_m);
+    if (zs.size() < 10)
+        return e;
+    std::nth_element(zs.begin(), zs.begin() + zs.size() / 2, zs.end());
+    e.baseline_z = zs[zs.size() / 2];
+
+    // Find the longest run of consecutive "high" points
+    int best_start = -1, best_end = -1, best_len = 0;
+    int cur_start = -1, cur_end = -1, cur_len = 0;
+
+    for (int i = 0; i < static_cast<int>(pts.size()); ++i)
+    {
+        const auto &p = pts[i];
+        if (!p.valid)
+            continue; // invalid points don't break the run
+        const bool high = std::fabs(e.baseline_z - p.z_m) > kEdgeThreshold;
+        if (high)
+        {
+            if (cur_len == 0)
+                cur_start = i;
+            cur_end = i;
+            ++cur_len;
+            if (cur_len > best_len)
+            {
+                best_len = cur_len;
+                best_start = cur_start;
+                best_end = cur_end;
+            }
+        }
+        else
+        {
+            cur_len = 0;
+        }
+    }
+    if (best_len < kEdgeMinRun)
+        return e;
+
+    // Left/right edge = smallest/largest X of the high run
+    e.left_x = 1e9f;
+    e.right_x = -1e9f;
+    for (int i = best_start; i <= best_end; ++i)
+    {
+        const auto &p = pts[i];
+        if (!p.valid)
+            continue;
+        const float d = std::fabs(e.baseline_z - p.z_m);
+        if (d <= kEdgeThreshold)
+            continue;
+        e.left_x = std::min(e.left_x, p.x_m);
+        e.right_x = std::max(e.right_x, p.x_m);
+        e.height = std::max(e.height, d);
+    }
+
+    if (e.left_x > -activeLength && e.right_x < activeLength)
+    {
+        e.found = true;
+        return e;
+    }
+
+    return e;
+}
+
+void I2wControllerNode::publisher_edge_status(const crawler_i2w_msgs::edge_status &current_edge_status)
+{
+    edge_statusPublisher_.publish(current_edge_status, runtime().clock().now().ns);
+
+    // LOG_INFO("Edge Status Published", "Found = " + std::to_string(current_edge_status.found) +
+    //                                 ", Left X = " + std::to_string(current_edge_status.left_x) +
+    //                                 ", Right X = " + std::to_string(current_edge_status.right_x) +
+    //                                 ", Baseline Z = " + std::to_string(current_edge_status.baseline_z) +
+    //                                 ", Height = " + std::to_string(current_edge_status.height));
+  
 }
