@@ -68,3 +68,14 @@ install(TARGETS robot_mcu_node
 
 target_compile_definitions(robot_mcu_node PRIVATE
 CONFIG_DIR="${CMAKE_SOURCE_DIR}/config")
+
+
+target_compile_options(robot_mcu_node PRIVATE
+    -g -O1
+    -fsanitize=address,undefined
+    -fno-omit-frame-pointer
+)
+
+target_link_options(robot_mcu_node PRIVATE
+    -fsanitize=address,undefined
+)

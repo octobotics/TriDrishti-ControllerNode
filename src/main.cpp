@@ -1,56 +1,64 @@
+
 #include <atomic>
 #include <chrono>
 #include <csignal>
 #include <iostream>
 #include <thread>
-#include <iostream>
-#include <i2w/impl.hpp>
+#include <string>
 
+#include <i2w/impl.hpp>
 #include "mcuLogger.hpp"
 #include "i2wControllerNode.hpp"
 
-
 namespace
 {
-    std::atomic<bool> shutdownRequested{false};
+    volatile std::sig_atomic_t shutdownRequested = 0;
 
     void signalHandler(int)
     {
-        shutdownRequested.store(true, std::memory_order_relaxed);
+        shutdownRequested = 1;
+        
     }
-} // namespace
+}
 
 int main()
 {
     std::signal(SIGINT, signalHandler);
+    std::signal(SIGTERM, signalHandler);
 
     MCULogger::init("mcu");
 
-    auto networkProfileFilePath = std::string(CONFIG_DIR) + "/ecal-network-udp.yaml";
+    const auto networkProfileFilePath =
+        std::string(CONFIG_DIR) + "/ecal-network-udp.yaml";
 
-    std::cout << "Network Profile File Path " << networkProfileFilePath << std::endl;
+    std::cout << "Network Profile File Path "
+              << networkProfileFilePath << '\n';
 
     LOG_INFO("main", "Starting Robot...");
 
-    i2w::Config i2w_mcu_config;
-    i2w_mcu_config.node_name = "controller_node";
-    i2w_mcu_config.ns = "";
+    i2w::Config config;
+    config.node_name = "controller_node";
+    config.ns = "";
 
-    I2wControllerNode i2wControllerNode(i2w_mcu_config);
-    
+    I2wControllerNode node(config);
 
-    i2wControllerNode.Setup();
+    node.Setup();
 
-    while (!shutdownRequested.load(std::memory_order_relaxed))
+    while (shutdownRequested == 0)
     {
-        i2wControllerNode.Tick();
+        node.Tick();
+
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
 
+    LOG_INFO("main", "Stopping Robot...");
 
-    i2wControllerNode.Dispose();
+    // TODO: Call the node's shutdown/cleanup method here,
+    // if its API provides one.
 
-        LOG_INFO("main", "Stopping Robot...");
+    // node.connection_monitor_running_.store(false);
+
+    LOG_INFO("main", "Robot stopped.");
 
     return 0;
 }

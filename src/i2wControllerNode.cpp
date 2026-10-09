@@ -2,13 +2,16 @@
 #include <iostream>
 #include "mcuLogger.hpp"
 
-I2wControllerNode::I2wControllerNode(i2w::Config config) : i2w::SystemBase(std::move(config))
+I2wControllerNode::I2wControllerNode(i2w::Config config) : i2w::SystemBase(std::move(config)), Controller()
 {
     LOG_INFO("I2wControllerNode", "I2wControllerNode created");
 }
 
 I2wControllerNode::~I2wControllerNode()
 {
+    connection_monitor_running_.store(false);
+
+    connection_monitor_thread_.join();
     LOG_INFO("I2wControllerNode", "I2wControllerNode Distroyed");
 }
 
@@ -39,18 +42,17 @@ i2w::LifecycleResult I2wControllerNode::OnTick() noexcept
 
         // std::cout << "UI is not live. Stopping the robot." << std::endl;
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
     return i2w::Ok();
 }
 
-void I2wControllerNode::move_robot(){
+void I2wControllerNode::move_robot()
+{
     current_edge_status = detectEdge(current_laser_profile.points);
     cmd_vel_ = calculateTheCmd_VelToFollowWeld(current_edge_status);
     publishCmd_Vel(cmd_vel_);
     publisher_edge_status(current_edge_status);
 }
-
 
 void I2wControllerNode::setupSubscriber()
 {
@@ -176,7 +178,6 @@ void I2wControllerNode::setupSubscriber()
         [this](const i2w::Sample<crawler_i2w_msgs::I2wScanControlProfile> &sample)
         {
             current_laser_profile = sample.value;
-
         },
         sub_options);
     laser_profile_sub_ = std::move(laser_profile_sub.value());
@@ -369,14 +370,14 @@ void I2wControllerNode::publishCmd_Vel(crawler_i2w_msgs::cmd_vel &cmd_vel_)
     // if (current_mode == I2wControllerNode::ControlModeType::WeldScan)
     // {
 
-        // publisher_edge_status(current_laser_profile);
-       
+    // publisher_edge_status(current_laser_profile);
+
     // }
 
     (void)cmd_velPublisher_.publish(cmd_vel_, static_cast<std::int64_t>(cmd_vel_.timestamp));
 
     publishCmd_Vel_Ui(0, 0, cmd_vel_.linearVelocity, cmd_vel_.angularVelocity, 0);
-    LOG_INFO("PublishCmd_Vel", std::to_string(cmd_vel_.linearVelocity) + " " + std::to_string(cmd_vel_.angularVelocity));
+    // LOG_INFO("PublishCmd_Vel", std::to_string(cmd_vel_.linearVelocity) + " " + std::to_string(cmd_vel_.angularVelocity));
 }
 
 float I2wControllerNode::normalize(int16_t value, float max_output)
@@ -388,7 +389,6 @@ float I2wControllerNode::normalize(int16_t value, float max_output)
 crawler_i2w_msgs::edge_status I2wControllerNode::detectEdge(const std::array<crawler_i2w_msgs::ScanControlPoint, crawler_i2w_msgs::kI2wScanControlMaxPoints> &pts)
 {
     crawler_i2w_msgs::edge_status e;
-
 
     // Base level = median Z of all valid points
     std::vector<float> zs;
@@ -467,5 +467,4 @@ void I2wControllerNode::publisher_edge_status(const crawler_i2w_msgs::edge_statu
     //                                 ", Right X = " + std::to_string(current_edge_status.right_x) +
     //                                 ", Baseline Z = " + std::to_string(current_edge_status.baseline_z) +
     //                                 ", Height = " + std::to_string(current_edge_status.height));
-  
 }
