@@ -17,6 +17,7 @@
 #include <sstream>
 #include <string>
 #include <csignal>
+#include <deque>
 
 #include <i2w/impl.hpp>
 #include "crawler_i2w_msgs/ui/joy.hpp"
@@ -45,6 +46,62 @@ public:
         AutoMission = crawler_i2w_services::ControlMode::kControlModeAutoMission,
         WeldScan = crawler_i2w_services::ControlMode::kControlModeWeldScan,
     };
+
+    // ============================ PARAMETERS ================================
+    // geometry
+    static inline const double WELD_WIDTH = 0.010;   // true bead width [m]
+    static  inline const  double SENSOR_OFFSET = 0.10; // laser line ahead of wheel axle [m]
+    static inline const  bool SENSOR_X_RIGHT = true;  // flip if robot steers AWAY from weld
+    // tracking
+    static inline const  double V_SCAN = 0.02;        // scan speed [m/s]
+    static inline const  double K_CENTER = 20.0;      // P on centre  [rad/s per m]
+    static inline const  double K_CENTER_I = 3.0;     // I on centre  [rad/s per m*s]
+    static inline const  double K_HEADING = 0.5;      // P on heading [rad/s per rad]
+    static inline const  double LAT_OMEGA_MAX = 0.06; // cap on centre (P+I) term [rad/s]
+    static inline const  double I_OMEGA_MAX = 0.05;   // anti-windup cap on I term [rad/s]
+    static inline const  double I_BAND = 0.004;       // integrate only if |centre| < this [m]
+    static inline const  double OMEGA_MAX = 0.5;      // [rad/s]
+    static inline const  double V_MIN_SCALE = 0.3;    // min fraction of V_SCAN while tracking
+    // alignment
+    static inline const  double ALIGN_OMEGA = 0.10;   // in-place rotation speed [rad/s]
+    static inline const  double ALIGN_TOL = 0.0004;   // width error to leave ALIGN  [m] (~16 deg)
+    static inline const  double REALIGN_TOL = 0.0030; // width error to re-enter ALIGN [m] (~40 deg)
+    static inline const  double WIDTH_NOISE = 0.0002; // hysteresis for direction flip [m]
+    static inline const  int ALIGN_HOLD = 5;          // good samples needed before TRACK
+    // estimation
+    static inline const  double EMA_ALPHA = 0.3;
+    static inline const  std::size_t SLOPE_WINDOW = 20;
+    static inline const  double SLOPE_MIN_DS = 0.004;  // min travel for drift slope [m]
+    static inline const  double HEADING_SWITCH = 0.26; // above: use width magnitude [rad]
+    // safety
+    static inline const  double LOST_TIMEOUT = 0.5; // [s]
+
+    // ============================ PERSISTENT STATE ==========================
+    // (static => kept between calls. If you run more than one controller
+    //  instance, move this struct into the class as a member.)
+    enum class Mode
+    {
+        WAIT,
+        ALIGN,
+        TRACK,
+        LOST
+    };
+    struct State
+    {
+        Mode mode = Mode::WAIT;
+        double last_v = 0.0, last_w = 0.0;
+        bool has_prev = false, filt_init = false;
+        double t_prev = 0.0, t_last_found = 0.0;
+        double s = 0.0, psi = 0.0; // dead-reckoned distance / heading
+        double centre_f = 0.0, width_f = 0.0, theta = 0.0;
+        double integ = 0.0;
+        double align_ref = 0.0, align_dir = 1.0;
+        int align_ok = 0, last_theta_sign = 0;
+        std::deque<std::pair<double, double>> hist; // (s, compensated centre)
+    };
+    static State st;
+
+    static inline const char *mode_name[] = {"WAIT", "ALIGN", "TRACK", "LOST"};
 
     I2wControllerNode(i2w::Config config);
     ~I2wControllerNode();
@@ -105,7 +162,7 @@ public:
     void configerLogger();
     void publishCmd_Vel_Ui(float maxLinear, float maxAngular, float linear, float angular, bool setMaxValue);
     float normalize(int16_t value, float max_output);
-    
+
     crawler_i2w_msgs::cmd_vel calculateTheCmd_VelToFollowWeld(crawler_i2w_msgs::edge_status current_edge_status);
 
     crawler_i2w_msgs::edge_status detectEdge(const std::array<crawler_i2w_msgs::ScanControlPoint, crawler_i2w_msgs::kI2wScanControlMaxPoints> &pts);
