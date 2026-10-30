@@ -73,28 +73,28 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
         {
             if (is_ui_live_)
             {
-                if (sample.value.button0)
-                {
-                    rasterProbHomeClient_.call({0}, static_cast<std::int64_t>(runtime().clock().now().ns), [](const i2w::Sample<crawler_i2w_services::RasterProbHomeResponse> &response)
-                                               { std::cout << "Raster Prob Home Service Response: " << (response.value.status ? "Success" : "Failure") << std::endl; });
-                }
-                if (sample.value.button3)
-                {
-                    rasterProbStopClient_.call({0}, static_cast<std::int64_t>(runtime().clock().now().ns), [](const i2w::Sample<crawler_i2w_services::RasterProbStopResponse> &response)
-                                               { std::cout << "Raster Prob Stop Service Response: " << (response.value.status ? "Success" : "Failure") << std::endl; });
-                }
-                if (sample.value.button1)
+                // if (sample.value.button0) //A
+                // {
+                //     rasterProbHomeClient_.call({0}, static_cast<std::int64_t>(runtime().clock().now().ns), [](const i2w::Sample<crawler_i2w_services::RasterProbHomeResponse> &response)
+                //                                { std::cout << "Raster Prob Home Service Response: " << (response.value.status ? "Success" : "Failure") << std::endl; });
+                // }
+                // if (sample.value.button4) //Y
+                // {
+                //     rasterProbStopClient_.call({0}, static_cast<std::int64_t>(runtime().clock().now().ns), [](const i2w::Sample<crawler_i2w_services::RasterProbStopResponse> &response)
+                //                                { std::cout << "Raster Prob Stop Service Response: " << (response.value.status ? "Success" : "Failure") << std::endl; });
+                // }
+                if (sample.value.button1) //B
                 {
                     rasterProbMoveClient_.call({-1, true}, static_cast<std::int64_t>(runtime().clock().now().ns), [](const i2w::Sample<crawler_i2w_services::RasterProbMoveResponse> &response)
                                                { std::cout << "Raster Prob Move Right Service Response: " << (response.value.status ? "Success" : "Failure") << std::endl; });
                 }
-                if (sample.value.button4)
+                if (sample.value.button2) //X
                 {
                     rasterProbMoveClient_.call({1, false}, static_cast<std::int64_t>(runtime().clock().now().ns), [](const i2w::Sample<crawler_i2w_services::RasterProbMoveResponse> &response)
                                                { std::cout << "Raster Prob Move Left Service Response: " << (response.value.status ? "Success" : "Failure") << std::endl; });
                 }
 
-                if (sample.value.button4)
+                if (sample.value.button4) //Y
                 {
                     speed_factor++;
                     if (speed_factor > 10)
@@ -359,7 +359,8 @@ i2w::LifecycleResult i2wNode::OnSetup() noexcept
 
 bool i2wNode::isConnected()
 {
-    std::string host = "192.168.0.195";
+    // std::string host = "10.0.0.2";
+    std::string host = "192.168.0.211";
     std::string command = "setsid ping -c 1 -W 1 " + host + " > /dev/null 2>&1";
     int result = system(command.c_str());
     return (result == 0);
